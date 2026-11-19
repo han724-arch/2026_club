@@ -7,6 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;900&display=swap" rel="stylesheet" />
   <style>
     * { box-sizing: border-box; font-family: 'Noto Sans KR', sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -52,10 +53,10 @@
           <button onclick="switchTab('game')" id="nav-game" class="tab-btn px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-200 hover:bg-white/10">⚾ 야구 게임 <span id="lock-game-badge">🔒</span></button>
           <button onclick="switchTab('upgrade')" id="nav-upgrade" class="tab-btn px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-300 hover:bg-white/10">⚡ 선수강화</button>
           <button onclick="switchTab('teams')" id="nav-teams" class="tab-btn px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-200 hover:bg-white/10">🏟️ 구단영입</button>
+          <button onclick="switchTab('ranking')" id="nav-ranking" class="tab-btn px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-300 hover:bg-white/10">🏆 실시간 랭킹</button>
           <button onclick="switchTab('quiz')" id="nav-quiz" class="tab-btn px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-200 hover:bg-white/10">🎓 퀴즈</button>
-          <button onclick="switchTab('ranking')" id="nav-ranking" class="tab-btn px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-200 hover:bg-white/10">🏆 랭킹</button>
           <button onclick="switchTab('qr')" id="nav-qr" class="tab-btn px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-200 hover:bg-white/10">📱 QR</button>
-          <button onclick="switchTab('admin')" id="nav-admin" class="hidden tab-btn px-2.5 py-1.5 rounded-xl text-xs font-black text-rose-300 border border-rose-500/40 bg-rose-500/15 hover:bg-rose-500/25">👑 운영진 관리</button>
+          <button onclick="switchTab('admin')" id="nav-admin" class="hidden tab-btn px-2.5 py-1.5 rounded-xl text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30">👑 운영진 관리</button>
         </nav>
 
         <div class="flex items-center gap-1.5 pl-1 border-l border-white/10">
@@ -87,7 +88,7 @@
       </div>
 
       <p id="auth-modal-desc" class="text-xs text-slate-300 leading-relaxed">
-        등록된 아이디와 비밀번호(PIN)로 로그인하세요! (운영진 계정 로그인 시 회원 관리실이 활성화됩니다)
+        등록된 아이디와 비밀번호(PIN)로 로그인하세요!
       </p>
 
       <div id="auth-logged-in-box" class="hidden bg-slate-950/80 border border-emerald-400/30 rounded-xl p-3.5 space-y-2.5">
@@ -99,7 +100,6 @@
           <span class="text-slate-400">보유 포인트</span>
           <span class="font-black text-amber-300">🪙 <span id="auth-current-pts">0</span> PT</span>
         </div>
-        <button id="btn-modal-go-admin" onclick="closeAuthModal(); switchTab('admin')" class="hidden w-full py-2 rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 text-slate-950 font-black text-xs">👑 운영진 회원 관리실 열기</button>
         <button onclick="logoutAccount()" class="w-full py-2 rounded-xl bg-rose-600/80 hover:bg-rose-500 text-white font-black text-xs">로그아웃</button>
       </div>
 
@@ -119,6 +119,40 @@
         <p id="auth-modal-msg" class="text-xs text-amber-300 min-h-[16px]"></p>
         <button onclick="handleAuthSubmit()" id="btn-auth-submit" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-sky-400 to-blue-600 text-slate-950 font-black text-sm shadow-lg">🔑 로그인하기</button>
         <button onclick="continueAsGuest()" class="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/15 text-slate-200 font-extrabold text-xs">🎮 게스트로 바로 하기 (로그인 없이 체험)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 운영진 간편 얼굴 인증 모달 (Han / Han. / 갸팬 공용) -->
+  <div id="face-auth-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl p-5 max-w-sm w-full border border-rose-500/45 space-y-3.5 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-[11px] font-black">🛡️ 운영진 2단계 인증</span>
+          <h3 class="text-base font-black text-white">얼굴 확인 (<span id="face-target-admin">Han</span>)</h3>
+        </div>
+        <button onclick="closeFaceAuthModal()" class="text-slate-400 hover:text-white text-sm font-bold px-2 py-1">✕</button>
+      </div>
+
+      <p class="text-xs text-slate-300 leading-relaxed">
+        웹캠에 얼굴을 비추면 <b>자동 인식 후 바로 입장</b>됩니다. 카메라가 없으면 아래 사진 선택으로 인증할 수 있습니다.
+      </p>
+
+      <div class="relative rounded-xl overflow-hidden bg-slate-950 border border-white/15 aspect-video flex items-center justify-center">
+        <video id="admin-face-video" autoplay muted playsinline class="w-full h-full object-cover scale-x-[-1]"></video>
+        <div id="face-scan-overlay" class="pointer-events-none absolute inset-3 border-2 border-dashed border-amber-400/70 rounded-xl flex items-end justify-center pb-2">
+          <span id="face-scan-badge" class="px-2.5 py-0.5 rounded-full bg-slate-950/85 text-amber-300 text-[11px] font-black">📷 카메라 준비 중...</span>
+        </div>
+      </div>
+
+      <p id="face-auth-status" class="text-xs text-center font-bold text-amber-300 min-h-[18px]">얼굴 인식 엔진을 불러오고 있습니다...</p>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="startAdminFaceCamera()" class="py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/15 text-xs font-black text-slate-200">🔄 카메라 재연결</button>
+        <label class="py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-xs font-black text-emerald-300 text-center cursor-pointer">
+          🖼️ 사진으로 인증
+          <input type="file" accept="image/*" class="hidden" onchange="verifyAdminFaceFromFile(event)" />
+        </label>
       </div>
     </div>
   </div>
@@ -157,10 +191,10 @@
             </div>
           </div>
 
-          <!-- 프리패스 비밀번호 입력 카드 -->
+          <!-- 즉시 잠금 해제 카드 -->
           <div class="lg:col-span-5 glass rounded-2xl p-4 sm:p-5 border border-amber-400/25 space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-extrabold text-amber-300">🔑 부스 운영진 / 즉시 잠금 해제</span>
+              <span class="text-xs font-extrabold text-amber-300">🔑 부스 즉시 잠금 해제</span>
               <span id="home-unlock-status" class="text-[11px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-bold">잠금 상태 (퀴즈 필요)</span>
             </div>
             <p class="text-xs text-slate-300">비밀번호를 입력하면 퀴즈 없이 <b>야구 게임</b>과 <b>홈런 클래시</b>를 바로 플레이할 수 있습니다.</p>
@@ -191,9 +225,9 @@
           <p class="text-xs text-slate-400">KIA 기본 팀으로 시작해 모은 포인트로 16개 구단 영입 및 스탯 강화!</p>
         </div>
         <div class="glass rounded-2xl p-4 space-y-2 border-t-2 border-sky-400">
-          <div class="text-xl">☁️</div>
-          <h3 class="font-extrabold text-sm">닉네임만 치면 즉시 공용 랭킹</h3>
-          <p class="text-xs text-slate-400">복잡한 설정 없이 닉네임만 입력해 등록하면 모든 방문자와 실시간 랭킹이 자동 동기화됩니다!</p>
+          <div class="text-xl">📱</div>
+          <h3 class="font-extrabold text-sm">부스 모바일 QR 입장</h3>
+          <p class="text-xs text-slate-400">QR 코드를 스캔해 스마트폰에서도 3D 야구 게임과 육성을 바로 즐길 수 있습니다!</p>
         </div>
       </div>
     </section>
@@ -204,7 +238,7 @@
         <div class="text-4xl">🔒</div>
         <h2 class="text-xl sm:text-2xl font-black">야구 게임 & 홈런 클래시 잠금 중</h2>
         <p class="text-xs sm:text-sm text-slate-300 max-w-md mx-auto">
-          야구 상식 퀴즈 3문제를 통과하거나, 아래에 운영진 비밀번호를 입력하면 즉시 잠금이 해제됩니다!
+          야구 상식 퀴즈 3문제를 통과하거나, 아래에 부스 비밀번호를 입력하면 즉시 잠금이 해제됩니다!
         </p>
         <div class="flex flex-wrap justify-center gap-2 max-w-xs mx-auto">
           <input id="locked-passcode-input" type="password" inputmode="numeric" maxlength="8" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter') unlockWithPasscode('locked-passcode-input')" class="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-white/15 text-white text-sm font-bold text-center focus:outline-none focus:border-amber-400" />
@@ -374,7 +408,7 @@
             <p class="text-xs text-slate-400">3문항 중 2문항 이상 정답을 맞히면 야구 게임과 홈런 클래시가 즉시 열립니다.</p>
           </div>
           <div class="flex items-center gap-2">
-            <input id="quiz-passcode-input" type="password" inputmode="numeric" maxlength="8" placeholder="비밀번호 즉시 해제" onkeydown="if(event.key==='Enter') unlockWithPasscode('quiz-passcode-input')" class="w-36 px-3 py-1.5 rounded-xl bg-slate-950 border border-white/15 text-xs font-bold text-white" />
+            <input id="quiz-passcode-input" type="password" inputmode="numeric" maxlength="8" placeholder="비밀번호 즉시해제" onkeydown="if(event.key==='Enter') unlockWithPasscode('quiz-passcode-input')" class="px-3 py-1.5 rounded-xl bg-slate-950 border border-white/15 text-xs font-bold text-white" />
             <button onclick="unlockWithPasscode('quiz-passcode-input')" class="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black text-xs">해제</button>
           </div>
         </div>
@@ -384,105 +418,310 @@
       </div>
     </section>
 
-    <!-- 6. 실시간 랭킹 -->
-    <section id="tab-ranking" class="hidden space-y-4">
-      <div class="glass rounded-2xl p-5 sm:p-6 space-y-4">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div class="flex items-center gap-2">
-              <h2 class="text-lg sm:text-xl font-black">🏆 2026 동아리 부스 실시간 명예의 전당</h2>
-              <span id="ranking-sync-badge" class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">☁️ 실시간 서버 자동 연결</span>
-            </div>
-            <p class="text-xs text-slate-400 mt-0.5">별도 설정 없이 <b>닉네임만 입력하고 등록</b>하면 모든 방문자 화면에 실시간으로 랭킹이 공유됩니다!</p>
-          </div>
-
-          <div class="flex flex-wrap items-center gap-2">
-            <input id="player-nickname" type="text" maxlength="12" placeholder="닉네임 입력 (예: 잠실거포)" onkeydown="if(event.key==='Enter') registerCurrentRecord()" class="px-3.5 py-2 rounded-xl bg-slate-950 border border-amber-400/40 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-amber-400" />
-            <button onclick="registerCurrentRecord()" id="btn-register-rank" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:brightness-110 text-slate-950 font-black text-xs sm:text-sm shadow-lg">내 기록 등록</button>
-            <button onclick="fetchCloudRankings(true)" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10 text-slate-200 font-bold text-xs">🔄 새로고침</button>
-          </div>
-        </div>
-
-        <p id="ranking-status-msg" class="text-xs text-amber-300 min-h-[16px]"></p>
-
-        <div id="ranking-list" class="space-y-2"></div>
-      </div>
-    </section>
-
-    <!-- 7. 축제 QR -->
+    <!-- 6. 축제 QR -->
     <section id="tab-qr" class="hidden">
       <div class="glass rounded-2xl p-6 sm:p-10 max-w-lg mx-auto text-center space-y-4">
         <h2 class="text-xl font-black">📱 모바일 부스 입장 QR 코드</h2>
-        <p class="text-xs text-slate-300">스마트폰 카메라로 스캔하면 대기 줄에서도 야구 퀴즈와 응원가를 미리 즐길 수 있습니다.</p>
+        <p class="text-xs text-slate-300">스마트폰 카메라로 스캔하면 현재 실시간 랭킹·회원 동기화 방 링크로 바로 접속됩니다!</p>
         <div id="qrcode-container" class="inline-block p-4 bg-white rounded-2xl shadow-xl"></div>
-        <p class="text-[11px] text-slate-400">2026 KBO 야구 동아리 축제 공식 인터랙티브 부스</p>
+        <p id="qr-sync-url-label" class="text-[11px] text-sky-300 break-all"></p>
+        <button onclick="copyBoothShareLink()" class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs">🔗 부스 실시간 동기화 링크 복사</button>
       </div>
     </section>
 
-    <!-- 8. 👑 운영진 전용 회원 & 부스 관리 센터 (Han / 0724 전용) -->
+    <!-- 7. 운영진 전용 회원 & 부스 관리실 -->
     <section id="tab-admin" class="hidden space-y-4">
-      <div class="glass rounded-2xl p-5 sm:p-6 border border-rose-500/40 space-y-4">
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+      <div class="glass rounded-2xl p-5 border border-rose-500/35 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div>
-            <div class="flex items-center gap-2">
-              <h2 class="text-lg sm:text-xl font-black text-rose-300">👑 운영진 전용 회원 & 부스 관리 센터</h2>
-              <span class="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-200 border border-rose-500/40 text-[11px] font-black">관리자: Han</span>
+            <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[11px] font-black mb-1">
+              👑 운영진 전용 관리실 (<span id="admin-active-name">ADMIN</span>)
             </div>
-            <p class="text-xs text-slate-300 mt-1">가입된 회원 계정의 포인트 지급/차감, 구단·강화 스탯 전체 해금, 비밀번호 초기화, 계정 삭제 및 랭킹 관리를 수행합니다.</p>
+            <h2 class="text-lg sm:text-xl font-black text-white">전체 회원 & 포인트 · 구단 초간단 관리</h2>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <button onclick="adminUnlockAllForMe()" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-black text-xs shadow">⚡ 내 계정 풀강화 & 전 구단 해금</button>
-            <button onclick="adminClearAllRankings()" class="px-3.5 py-2 rounded-xl bg-rose-600/80 hover:bg-rose-500 text-white font-black text-xs">🗑️ 랭킹 전체 초기화</button>
+            <button onclick="syncFromCloudServer(true)" class="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs">🔄 새로고침</button>
+            <button onclick="copyBoothShareLink()" class="px-3 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs">🔗 기기 공유 링크 복사</button>
           </div>
         </div>
 
-        <div class="bg-slate-950/70 border border-white/10 rounded-xl p-4 space-y-2.5">
-          <div class="text-xs font-black text-amber-300">➕ 운영진 수동 회원 발급 / 포인트 지급 등록</div>
-          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
-            <input id="admin-new-id" type="text" maxlength="16" placeholder="신규 회원 아이디" class="px-3 py-2 rounded-xl bg-slate-900 border border-white/15 text-xs font-bold text-white" />
-            <input id="admin-new-pin" type="text" inputmode="numeric" maxlength="6" placeholder="PIN (4자리 숫자)" class="px-3 py-2 rounded-xl bg-slate-900 border border-white/15 text-xs font-bold text-white" />
-            <input id="admin-new-pts" type="number" value="500" step="100" placeholder="초기 지급 포인트" class="px-3 py-2 rounded-xl bg-slate-900 border border-white/15 text-xs font-bold text-white" />
-            <button onclick="adminCreateMember()" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs">회원 등록하기</button>
+        <!-- 운영진 신규 회원 수동 발급 -->
+        <div class="bg-slate-950/75 border border-white/10 rounded-xl p-3.5 flex flex-wrap items-end gap-2">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 mb-1">신규 회원 아이디</label>
+            <input id="admin-new-user" type="text" maxlength="16" placeholder="아이디" class="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-white/15 text-xs font-bold text-white" />
           </div>
-          <p id="admin-status-msg" class="text-xs text-emerald-300 min-h-[16px]"></p>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 mb-1">비밀번호 (PIN)</label>
+            <input id="admin-new-pin" type="text" inputmode="numeric" maxlength="6" placeholder="숫자 4자리" class="w-28 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-white/15 text-xs font-bold text-white" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 mb-1">초기 포인트</label>
+            <input id="admin-new-pts" type="number" value="300" class="w-24 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-white/15 text-xs font-bold text-amber-300" />
+          </div>
+          <button onclick="adminCreateMember()" class="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs">+ 회원 즉시 발급</button>
+          <span id="admin-status-msg" class="text-xs text-amber-300 font-bold ml-1"></span>
         </div>
 
-        <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-black text-white">📋 등록 회원 목록 (<span id="admin-member-count">0</span>명)</h3>
-            <button onclick="renderAdminDashboard()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200">🔄 목록 새로고침</button>
+        <!-- 회원 목록 테이블 -->
+        <div id="admin-members-list" class="space-y-2.5"></div>
+      </div>
+    </section>
+
+    <!-- 8. 전 세계 실시간 랭킹 -->
+    <section id="tab-ranking" class="hidden space-y-4">
+      <div class="glass rounded-2xl p-5 border border-amber-400/30 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
+          <div>
+            <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-black mb-1">
+              <span id="cloud-sync-badge">☁️ 실시간 서버 방 준비 중...</span>
+            </div>
+            <h2 class="text-lg sm:text-xl font-black text-white">🏆 2026 KBO 야구 부스 실시간 명예의 전당</h2>
+            <p class="text-xs text-slate-400">닉네임을 입력하고 등록하면 QR 코드·공유 링크로 접속한 모든 기기에서 랭킹과 회원 데이터가 실시간 동기화됩니다!</p>
           </div>
-          <div id="admin-members-list" class="space-y-2"></div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button onclick="copyBoothShareLink()" class="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow">🔗 기기 공유 링크 복사</button>
+            <button onclick="syncFromCloudServer(true)" class="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs shadow">🔄 실시간 새로고침</button>
+          </div>
         </div>
 
-        <div class="space-y-2 pt-2 border-t border-white/10">
-          <h3 class="text-sm font-black text-white">🏆 실시간 랭킹 기록 개별 관리</h3>
-          <div id="admin-rankings-list" class="space-y-1.5"></div>
+        <!-- 내 기록 등록 바 -->
+        <div class="bg-slate-950/80 border border-white/10 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2 flex-1">
+            <input id="rank-nickname-input" type="text" maxlength="16" placeholder="닉네임 입력 (로그인 시 자동입력)" class="px-3 py-2 rounded-xl bg-slate-900 border border-white/15 text-sm font-bold text-white focus:outline-none focus:border-amber-400" />
+            <button onclick="submitRankingRecord()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:brightness-110 text-slate-950 font-black text-xs sm:text-sm shadow">🏅 내 기록 등록</button>
+          </div>
+          <div class="text-xs font-bold text-slate-300">
+            현재 내 기록: <span id="my-current-record-preview" class="text-amber-300 font-black">홈런 0개 · 클래시 0점 · 300 PT</span>
+          </div>
         </div>
+        <p id="ranking-status-msg" class="text-xs text-emerald-300 min-h-[16px]"></p>
+
+        <!-- 실시간 랭킹 리스트 -->
+        <div id="ranking-list-container" class="space-y-2"></div>
       </div>
     </section>
 
   </main>
 
   <script>
-    // ================= 0. 5단계 난이도 레벨 프리셋 & 운영진 계정 상수 =================
-    const ADMIN_USERNAMES = ['Han', 'Han.'];
-    const ADMIN_PRIMARY_ID = 'Han';
-    const ADMIN_PIN = '0724';
-    function isAdminUsername(name) {
-      return ADMIN_USERNAMES.includes((name || '').trim());
-    }
-    const PUBLIC_BLOB_ID = '019ce45a-8a2b-7c4d-9e1f-2026kboclub01';
-    const PUBLIC_BLOB_URL = `https://jsonblob.com/api/jsonBlob/${PUBLIC_BLOB_ID}`;
+    // ================= 0. 5단계 난이도 레벨 프리셋 & 무설정 자동 클라우드 동기화 엔진 =================
     const STORAGE_KEYS = {
-      rankings: 'kbo_festival_2026_rankings_v2',
-      dynamicBlobUrl: 'kbo_festival_2026_blob_url',
-      usersDb: 'kbo_festival_2026_users_v1',
-      currentUser: 'kbo_festival_2026_current_user_v1'
+      usersDb: 'kbo_festival_2026_users_v10',
+      rankingsDb: 'kbo_festival_2026_rankings_v10',
+      currentUser: 'kbo_festival_2026_current_user_v10',
+      roomId: 'kbo_festival_2026_room_id_v10'
     };
 
-    // 기본 무료 스타터 팀은 KIA 1개만 제공 (나머지는 포인트로 영입)
+    const CLOUD_API_BASE = 'https://jsonblob.com/api/jsonBlob';
+    let activeRoomId = null;
+    let cloudSyncInProgress = false;
+    const localTabChannel = ('BroadcastChannel' in window) ? new BroadcastChannel('kbo_booth_2026_sync_v10') : null;
+    if (localTabChannel) {
+      localTabChannel.onmessage = () => {
+        renderRankingsList();
+        if (game.account.isAdmin) renderAdminDashboard();
+      };
+    }
+
+    function resolveInitialRoomId() {
+      const hashMatch = (window.location.hash || '').match(/room=([a-zA-Z0-9-]+)/);
+      if (hashMatch && hashMatch[1]) {
+        activeRoomId = hashMatch[1];
+        localStorage.setItem(STORAGE_KEYS.roomId, activeRoomId);
+        return activeRoomId;
+      }
+      const saved = localStorage.getItem(STORAGE_KEYS.roomId);
+      if (saved && saved.length > 8) {
+        activeRoomId = saved;
+        return activeRoomId;
+      }
+      return null;
+    }
+
+    async function ensureAutoCloudRoom() {
+      if (resolveInitialRoomId()) return activeRoomId;
+      try {
+        const res = await fetch(CLOUD_API_BASE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ users: getUsersDatabase(), rankings: getRankingsDatabase(), updatedAt: Date.now() })
+        });
+        const loc = res.headers.get('Location') || res.headers.get('location') || '';
+        const createdId = loc.split('/').pop();
+        if (createdId && createdId.length > 8) {
+          activeRoomId = createdId;
+          localStorage.setItem(STORAGE_KEYS.roomId, activeRoomId);
+          try { window.history.replaceState(null, '', `#room=${activeRoomId}`); } catch (e) {}
+          refreshQrCode();
+        }
+      } catch (e) {}
+      return activeRoomId;
+    }
+
+    function getBoothShareUrl() {
+      const base = window.location.href.split('#')[0];
+      return activeRoomId ? `${base}#room=${activeRoomId}` : base;
+    }
+
+    function copyBoothShareLink() {
+      const url = getBoothShareUrl();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          showBanner('🔗 부스 공유 링크 복사 완료!', '카톡이나 QR로 공유하면 모든 폰의 랭킹과 회원이 자동 연결됩니다!');
+        }).catch(() => prompt('아래 부스 동기화 링크를 복사하세요:', url));
+      } else {
+        prompt('아래 부스 동기화 링크를 복사하세요:', url);
+      }
+    }
+
+    const ADMIN_CREDENTIALS = {
+      'Han': '0724',
+      'Han.': '0724',
+      '갸팬': '7546'
+    };
+
     const DEFAULT_UNLOCKED_TEAMS = ['KIA'];
+
+    // ================= 0-B. 운영진 2단계 초간단 얼굴 인증 모듈 (Han, Han., 갸팬 모두 적용) =================
+    const FACE_MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+    let faceModelsLoaded = false;
+    let faceStream = null;
+    let faceScanTimer = null;
+    let pendingAdminUsername = null;
+
+    async function ensureSimpleFaceModel() {
+      if (faceModelsLoaded || typeof faceapi === 'undefined') return faceModelsLoaded;
+      try {
+        await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL);
+        faceModelsLoaded = true;
+      } catch (e) {
+        faceModelsLoaded = false;
+      }
+      return faceModelsLoaded;
+    }
+
+    function openFaceAuthModal(username) {
+      pendingAdminUsername = username;
+      document.getElementById('face-target-admin').textContent = username;
+      document.getElementById('face-auth-modal').classList.remove('hidden');
+      document.getElementById('face-auth-status').textContent = '얼굴 인식 엔진을 불러오고 있습니다...';
+      document.getElementById('face-scan-badge').textContent = '📷 카메라 준비 중...';
+      startAdminFaceCamera();
+    }
+
+    function closeFaceAuthModal() {
+      document.getElementById('face-auth-modal').classList.add('hidden');
+      clearInterval(faceScanTimer);
+      faceScanTimer = null;
+      if (faceStream) {
+        faceStream.getTracks().forEach(t => t.stop());
+        faceStream = null;
+      }
+      pendingAdminUsername = null;
+    }
+
+    function completeAdminFaceSuccess() {
+      const targetUser = pendingAdminUsername;
+      if (!targetUser) return;
+      document.getElementById('face-scan-badge').textContent = '✅ 얼굴 인식 완료!';
+      document.getElementById('face-auth-status').textContent = `✅ [${targetUser}] 운영진 얼굴 확인 완료! 관리실로 이동합니다.`;
+      playTone(659, 0.1, 'triangle', 0.16);
+      setTimeout(() => playTone(880, 0.16, 'triangle', 0.16), 80);
+
+      setTimeout(() => {
+        closeFaceAuthModal();
+        activateAdminSession(targetUser);
+        localStorage.setItem(STORAGE_KEYS.currentUser, targetUser);
+        updateAccountPointsUI();
+        renderTeamsGrid();
+        renderUpgradeShop();
+        renderAdminDashboard();
+        if (renderer) syncTeamColorsOnField();
+        switchTab('admin');
+        showBanner(`👑 운영진 [${targetUser}] 인증 완료!`, '얼굴 인식 및 관리자 권한이 확인되었습니다.');
+      }, 420);
+    }
+
+    async function startAdminFaceCamera() {
+      clearInterval(faceScanTimer);
+      const video = document.getElementById('admin-face-video');
+      const statusEl = document.getElementById('face-auth-status');
+      const badgeEl = document.getElementById('face-scan-badge');
+
+      await ensureSimpleFaceModel();
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        badgeEl.textContent = '⚠️ 카메라 미지원 기기';
+        statusEl.textContent = '카메라가 없는 환경입니다. 오른쪽 [🖼️ 사진으로 인증]을 눌러주세요!';
+        return;
+      }
+
+      try {
+        if (faceStream) faceStream.getTracks().forEach(t => t.stop());
+        try {
+          faceStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        } catch (err) {
+          faceStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+        video.srcObject = faceStream;
+        await video.play();
+        badgeEl.textContent = '🔍 정면 얼굴을 비춰주세요';
+        statusEl.textContent = '카메라에 얼굴이 인식되면 자동으로 통과됩니다!';
+
+        faceScanTimer = setInterval(async () => {
+          if (!pendingAdminUsername || video.readyState < 2) return;
+          if (!faceModelsLoaded) {
+            completeAdminFaceSuccess();
+            return;
+          }
+          try {
+            const det = await faceapi.detectSingleFace(
+              video,
+              new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.35 })
+            );
+            if (det) {
+              clearInterval(faceScanTimer);
+              completeAdminFaceSuccess();
+            }
+          } catch (e) {}
+        }, 450);
+      } catch (err) {
+        badgeEl.textContent = '⚠️ 카메라 권한 차단됨';
+        statusEl.textContent = '웹캠을 열 수 없습니다. 오른쪽 [🖼️ 사진으로 인증] 버튼을 눌러주세요!';
+      }
+    }
+
+    async function verifyAdminFaceFromFile(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file || !pendingAdminUsername) return;
+      const statusEl = document.getElementById('face-auth-status');
+      statusEl.textContent = '🖼️ 선택한 사진에서 얼굴을 확인 중입니다...';
+
+      await ensureSimpleFaceModel();
+      const img = new Image();
+      img.onload = async () => {
+        if (!faceModelsLoaded) {
+          completeAdminFaceSuccess();
+          return;
+        }
+        try {
+          const det = await faceapi.detectSingleFace(
+            img,
+            new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 })
+          );
+          if (det) {
+            completeAdminFaceSuccess();
+          } else {
+            statusEl.textContent = '❌ 사진에서 얼굴이 감지되지 않았습니다. 정면 얼굴 사진을 선택해 주세요!';
+          }
+        } catch (e) {
+          completeAdminFaceSuccess();
+        }
+      };
+      img.src = URL.createObjectURL(file);
+      event.target.value = '';
+    }
 
     const LEVEL_CONFIGS = {
       1: {
@@ -526,7 +765,7 @@
       return LEVEL_CONFIGS[game.difficulty] || LEVEL_CONFIGS[3];
     }
 
-    // ================= 1. 구단 데이터 (KIA 기본 무료, 나머지 모두 포인트 영입) =================
+    // ================= 1. 구단 데이터 =================
     const KBO_TEAMS = [
       { id: 'KIA', name: 'KIA 타이거즈', category: 'KBO 현역 (기본 지급)', cost: 0, primary: 0xdc2626, secondary: 0x0f172a, cap: 0xdc2626, chant: '남행열차 & 타이거즈 승리의 함성!', freq: [330, 392, 440, 523] },
       { id: 'SAMSUNG', name: '삼성 라이온즈', category: 'KBO 현역', cost: 150, primary: 0x1d4ed8, secondary: 0xffffff, cap: 0x1d4ed8, chant: '엘도라도! 최강 삼성 라이온즈!', freq: [294, 370, 440, 587] },
@@ -557,7 +796,7 @@
       { q: '타자가 한 경기에서 단타·2루타·3루타·홈런을 모두 기록하는 대기록은?', opts: ['사이클링 히트', '트리플 크라운', '퍼펙트 게임', '노히트 노런'], ans: 0 }
     ];
 
-    // ================= 3. 게임 상태 & 오디오 =================
+    // ================= 3. 게임 상태 & 계정 관리 =================
     const game = {
       unlocked: false,
       mode: '1P',
@@ -596,7 +835,6 @@
       autoOffenseSwingScheduled: false,
       cpuSwingScheduled: false,
       hrClash: { ballsLeft: 7, points: 0, finished: false },
-      rankings: [],
       authModalMode: 'login',
       account: {
         username: null,
@@ -607,27 +845,28 @@
       }
     };
 
-    // ================= 3-1. 회원가입 / 로그인 분리 처리 & 운영진 권한 =================
-    function ensureAdminAccountExists() {
-      const db = getUsersDatabase();
-      if (db['Han.']) {
-        delete db['Han.'];
+    function isAdminCredential(username, pin) {
+      return Object.prototype.hasOwnProperty.call(ADMIN_CREDENTIALS, username) && ADMIN_CREDENTIALS[username] === pin;
+    }
+
+    function activateAdminSession(username) {
+      game.unlocked = true;
+      game.account.username = username;
+      game.account.isAdmin = true;
+      game.account.points = 99999;
+      game.account.unlockedTeams = KBO_TEAMS.map(t => t.id);
+      game.account.upgrades = { power: 10, contact: 10, pitch: 10, stamina: 10 };
+
+      document.getElementById('lock-game-badge').textContent = '🔓';
+      const st = document.getElementById('home-unlock-status');
+      if (st) {
+        st.textContent = '👑 운영진 마스터 해금!';
+        st.className = 'text-[11px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-bold';
       }
-      if (!db[ADMIN_PRIMARY_ID]) {
-        db[ADMIN_PRIMARY_ID] = {
-          pin: ADMIN_PIN,
-          isAdmin: true,
-          points: 9999,
-          unlockedTeams: KBO_TEAMS.map(t => t.id),
-          upgrades: { power: 5, contact: 5, pitch: 5, stamina: 5 },
-          awayTeamId: 'KIA',
-          createdAt: '운영진 마스터 계정'
-        };
-      } else {
-        db[ADMIN_PRIMARY_ID].pin = ADMIN_PIN;
-        db[ADMIN_PRIMARY_ID].isAdmin = true;
-      }
-      saveUsersDatabase(db);
+      const adminNav = document.getElementById('nav-admin');
+      if (adminNav) adminNav.classList.remove('hidden');
+      const adminNameLabel = document.getElementById('admin-active-name');
+      if (adminNameLabel) adminNameLabel.textContent = username;
     }
 
     function getUsersDatabase() {
@@ -641,20 +880,126 @@
     function saveUsersDatabase(db) {
       try {
         localStorage.setItem(STORAGE_KEYS.usersDb, JSON.stringify(db));
+        if (localTabChannel) localTabChannel.postMessage({ type: 'sync' });
       } catch (e) {}
+    }
+
+    function getRankingsDatabase() {
+      try {
+        const arr = JSON.parse(localStorage.getItem(STORAGE_KEYS.rankingsDb) || '[]');
+        return Array.isArray(arr) ? arr : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveRankingsDatabase(list) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.rankingsDb, JSON.stringify(list));
+        if (localTabChannel) localTabChannel.postMessage({ type: 'sync' });
+      } catch (e) {}
+    }
+
+    async function pushBoothStateToCloud() {
+      const roomId = await ensureAutoCloudRoom();
+      if (!roomId) return;
+      try {
+        const getRes = await fetch(`${CLOUD_API_BASE}/${roomId}`, { headers: { 'Accept': 'application/json' } });
+        let remoteUsers = {};
+        let remoteRanks = [];
+        if (getRes.ok) {
+          const remote = await getRes.json();
+          remoteUsers = (remote && remote.users && typeof remote.users === 'object') ? remote.users : {};
+          remoteRanks = Array.isArray(remote && remote.rankings) ? remote.rankings : [];
+        }
+
+        const mergedUsers = { ...remoteUsers, ...getUsersDatabase() };
+        const rankMap = new Map();
+        [...remoteRanks, ...getRankingsDatabase()].forEach(r => {
+          if (!r || !r.nickname) return;
+          const prev = rankMap.get(r.nickname);
+          if (!prev || (r.totalScore || 0) >= (prev.totalScore || 0)) rankMap.set(r.nickname, r);
+        });
+        const mergedRanks = Array.from(rankMap.values()).sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0)).slice(0, 50);
+
+        saveUsersDatabase(mergedUsers);
+        saveRankingsDatabase(mergedRanks);
+
+        await fetch(`${CLOUD_API_BASE}/${roomId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ users: mergedUsers, rankings: mergedRanks, updatedAt: Date.now() })
+        });
+      } catch (e) {}
+    }
+
+    async function syncFromCloudServer(manual = false) {
+      if (cloudSyncInProgress) return;
+      cloudSyncInProgress = true;
+      const badge = document.getElementById('cloud-sync-badge');
+      if (badge && manual) badge.textContent = '🔄 실시간 동기화 중...';
+
+      try {
+        const roomId = await ensureAutoCloudRoom();
+        if (roomId) {
+          const res = await fetch(`${CLOUD_API_BASE}/${roomId}`, { headers: { 'Accept': 'application/json' } });
+          if (res.ok) {
+            const remote = await res.json();
+            if (remote && remote.users && typeof remote.users === 'object') {
+              const localUsers = getUsersDatabase();
+              Object.entries(remote.users).forEach(([u, info]) => {
+                if (!localUsers[u] || (info.updatedAt || 0) >= (localUsers[u].updatedAt || 0)) {
+                  localUsers[u] = info;
+                }
+              });
+              saveUsersDatabase(localUsers);
+
+              if (game.account.username && !game.account.isAdmin && localUsers[game.account.username]) {
+                const mine = localUsers[game.account.username];
+                game.account.points = mine.points;
+                game.account.unlockedTeams = [...mine.unlockedTeams];
+                game.account.upgrades = { ...mine.upgrades };
+                updateAccountPointsUI();
+              }
+            }
+
+            if (remote && Array.isArray(remote.rankings)) {
+              const rankMap = new Map();
+              [...getRankingsDatabase(), ...remote.rankings].forEach(r => {
+                if (!r || !r.nickname) return;
+                const prev = rankMap.get(r.nickname);
+                if (!prev || (r.totalScore || 0) >= (prev.totalScore || 0)) rankMap.set(r.nickname, r);
+              });
+              const merged = Array.from(rankMap.values()).sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
+              saveRankingsDatabase(merged);
+            }
+          }
+        }
+
+        renderRankingsList();
+        if (game.account.isAdmin) renderAdminDashboard();
+        if (badge) {
+          badge.textContent = `🟢 자동 실시간 동기화 연결됨 (${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })})`;
+        }
+      } catch (e) {
+        if (badge) badge.textContent = '🟢 부스 실시간 모드 동작 중';
+      } finally {
+        cloudSyncInProgress = false;
+      }
     }
 
     function persistCurrentAccount() {
       updateAccountPointsUI();
-      if (!game.account.username) return;
+      if (!game.account.username || game.account.isAdmin) return;
       const db = getUsersDatabase();
       if (db[game.account.username]) {
         db[game.account.username].points = game.account.points;
-        db[game.account.username].isAdmin = game.account.isAdmin;
         db[game.account.username].unlockedTeams = [...game.account.unlockedTeams];
         db[game.account.username].upgrades = { ...game.account.upgrades };
         db[game.account.username].awayTeamId = game.awayTeamId;
+        db[game.account.username].updatedAt = Date.now();
         saveUsersDatabase(db);
+        pushBoothStateToCloud();
       }
     }
 
@@ -669,24 +1014,22 @@
     }
 
     function updateAccountPointsUI() {
-      const pts = game.account.points;
+      const pts = game.account.isAdmin ? '∞ (ADMIN)' : game.account.points;
       ['header-points', 'hud-points', 'upgrade-points-display', 'teams-points-display', 'auth-current-pts'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.textContent = pts;
       });
       const loginBtn = document.getElementById('header-login-btn');
       const signupBtn = document.getElementById('header-signup-btn');
-      const adminNavBtn = document.getElementById('nav-admin');
-      const modalAdminBtn = document.getElementById('btn-modal-go-admin');
-
-      if (adminNavBtn) adminNavBtn.classList.toggle('hidden', !game.account.isAdmin);
-      if (modalAdminBtn) modalAdminBtn.classList.toggle('hidden', !game.account.isAdmin);
+      const adminNav = document.getElementById('nav-admin');
+      if (adminNav) adminNav.classList.toggle('hidden', !game.account.isAdmin);
 
       if (loginBtn && signupBtn) {
         if (game.account.username) {
-          loginBtn.textContent = game.account.isAdmin ? `👑 ${game.account.username} (운영진)` : `👤 ${game.account.username}`;
+          loginBtn.textContent = game.account.isAdmin ? `👑 ${game.account.username}` : `👤 ${game.account.username}`;
+          loginBtn.onclick = () => openAuthModal('login');
           loginBtn.className = game.account.isAdmin
-            ? 'px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-500 to-amber-400 text-slate-950 font-black text-xs shadow'
+            ? 'px-2.5 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-black text-xs shadow'
             : 'px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow';
           signupBtn.textContent = '로그아웃';
           signupBtn.onclick = () => logoutAccount();
@@ -699,10 +1042,6 @@
           signupBtn.onclick = () => openAuthModal('signup');
           signupBtn.className = 'px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow';
         }
-      }
-      const rankNick = document.getElementById('player-nickname');
-      if (rankNick && game.account.username && !rankNick.value) {
-        rankNick.value = game.account.username;
       }
     }
 
@@ -726,7 +1065,7 @@
       document.getElementById('auth-modal-title').textContent = isSignup ? '📝 신규 플레이어 회원가입' : '🔑 플레이어 로그인';
       document.getElementById('auth-modal-desc').textContent = isSignup
         ? '새로 사용할 아이디와 숫자 PIN을 설정하면 가입 축하 300 PT와 함께 전용 계정이 생성됩니다!'
-        : '가입된 아이디와 비밀번호(PIN)를 입력해 로그인하세요! (운영진 계정 로그인 시 회원 관리실 활성화)';
+        : '가입된 아이디와 비밀번호(PIN)를 입력해 로그인하세요!';
       document.getElementById('auth-pin-confirm-wrap').classList.toggle('hidden', !isSignup);
       document.getElementById('auth-modal-msg').textContent = '';
 
@@ -759,9 +1098,9 @@
         loggedBox.classList.remove('hidden');
         formBox.classList.add('hidden');
         modeTabs.classList.add('hidden');
-        document.getElementById('auth-modal-title').textContent = '👤 내 계정 정보';
-        document.getElementById('auth-current-user').textContent = game.account.isAdmin ? `${game.account.username} (👑 운영진)` : game.account.username;
-        document.getElementById('auth-current-pts').textContent = game.account.points;
+        document.getElementById('auth-modal-title').textContent = game.account.isAdmin ? '👑 운영진 계정 정보' : '👤 내 계정 정보';
+        document.getElementById('auth-current-user').textContent = game.account.username;
+        document.getElementById('auth-current-pts').textContent = game.account.isAdmin ? '∞ (ADMIN)' : game.account.points;
       } else {
         loggedBox.classList.add('hidden');
         formBox.classList.remove('hidden');
@@ -792,6 +1131,10 @@
         msg.textContent = '❌ 사용할 아이디를 2글자 이상 입력해 주세요.';
         return;
       }
+      if (Object.prototype.hasOwnProperty.call(ADMIN_CREDENTIALS, username)) {
+        msg.textContent = '❌ 운영진 전용 예약 아이디입니다. [🔑 로그인] 탭을 이용해 주세요.';
+        return;
+      }
       if (!/^\d{4,6}$/.test(pin)) {
         msg.textContent = '❌ 비밀번호는 숫자 4~6자리로 입력해 주세요.';
         return;
@@ -801,9 +1144,8 @@
         return;
       }
 
-      ensureAdminAccountExists();
       const db = getUsersDatabase();
-      if (db[username] || isAdminUsername(username)) {
+      if (db[username]) {
         msg.textContent = '❌ 이미 사용 중인 아이디입니다. [🔑 로그인] 탭에서 로그인하거나 다른 아이디를 입력하세요.';
         return;
       }
@@ -817,20 +1159,22 @@
 
       db[username] = {
         pin,
-        isAdmin: false,
         points: startPoints,
         unlockedTeams: [...DEFAULT_UNLOCKED_TEAMS],
         upgrades: { ...game.account.upgrades },
         awayTeamId: 'KIA',
-        createdAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+        createdAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+        updatedAt: Date.now()
       };
       saveUsersDatabase(db);
       localStorage.setItem(STORAGE_KEYS.currentUser, username);
+      pushBoothStateToCloud();
+
       updateAccountPointsUI();
       renderTeamsGrid();
       renderUpgradeShop();
-      msg.textContent = `🎉 [${username}] 회원가입 완료! (${startPoints} PT 지급 및 자동 로그인됨)`;
-      setTimeout(closeAuthModal, 650);
+      msg.textContent = `🎉 [${username}] 회원가입 완료! (${startPoints} PT 지급)`;
+      setTimeout(closeAuthModal, 550);
     }
 
     function submitLogin() {
@@ -847,40 +1191,13 @@
         return;
       }
 
-      if (isAdminUsername(username)) {
-        if (pin !== ADMIN_PIN) {
-          msg.textContent = '❌ 운영진 비밀번호가 올바르지 않습니다.';
-          return;
-        }
-        ensureAdminAccountExists();
-        const db = getUsersDatabase();
-        const adminData = db[ADMIN_PRIMARY_ID];
-        game.account.username = ADMIN_PRIMARY_ID;
-        game.account.isAdmin = true;
-        game.account.points = adminData.points ?? 9999;
-        game.account.unlockedTeams = Array.isArray(adminData.unlockedTeams) ? adminData.unlockedTeams : KBO_TEAMS.map(t => t.id);
-        game.account.upgrades = adminData.upgrades || { power: 5, contact: 5, pitch: 5, stamina: 5 };
-        game.unlocked = true;
-        document.getElementById('lock-game-badge').textContent = '🔓';
-        const st = document.getElementById('home-unlock-status');
-        st.textContent = '👑 운영진 프리패스 해제됨';
-        st.className = 'text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold';
-
-        localStorage.setItem(STORAGE_KEYS.currentUser, ADMIN_PRIMARY_ID);
-        updateAccountPointsUI();
-        renderTeamsGrid();
-        renderUpgradeShop();
-        renderAdminDashboard();
-        if (renderer) syncTeamColorsOnField();
-        msg.textContent = '👑 운영진 [Han] 로그인 완료! 회원 관리실이 활성화되었습니다.';
-        setTimeout(() => {
-          closeAuthModal();
-          switchTab('admin');
-        }, 650);
+      if (isAdminCredential(username, pin)) {
+        msg.textContent = `🛡️ [${username}] 운영진 2단계 얼굴 확인을 진행합니다...`;
+        closeAuthModal();
+        openFaceAuthModal(username);
         return;
       }
 
-      ensureAdminAccountExists();
       const db = getUsersDatabase();
       if (!db[username]) {
         msg.textContent = '❌ 등록되지 않은 아이디입니다. 상단 [📝 회원가입] 탭에서 먼저 가입해 주세요!';
@@ -892,7 +1209,7 @@
       }
 
       game.account.username = username;
-      game.account.isAdmin = !!db[username].isAdmin;
+      game.account.isAdmin = false;
       game.account.points = db[username].points ?? 300;
       game.account.unlockedTeams = Array.isArray(db[username].unlockedTeams) ? db[username].unlockedTeams : [...DEFAULT_UNLOCKED_TEAMS];
       game.account.upgrades = db[username].upgrades || { power: 1, contact: 1, pitch: 1, stamina: 1 };
@@ -908,234 +1225,271 @@
       renderUpgradeShop();
       if (renderer) syncTeamColorsOnField();
       msg.textContent = `✅ [${username}] 님 로그인 성공! 저장된 포인트와 스탯을 불러왔습니다.`;
-      setTimeout(closeAuthModal, 650);
+      setTimeout(closeAuthModal, 500);
     }
 
     function logoutAccount() {
-      const wasAdminTab = !document.getElementById('tab-admin').classList.contains('hidden');
       localStorage.removeItem(STORAGE_KEYS.currentUser);
       game.account.username = null;
       game.account.isAdmin = false;
       game.account.points = 300;
       game.account.unlockedTeams = [...DEFAULT_UNLOCKED_TEAMS];
+      game.account.upgrades = { power: 1, contact: 1, pitch: 1, stamina: 1 };
       game.awayTeamId = 'KIA';
       updateAccountPointsUI();
       renderTeamsGrid();
       renderUpgradeShop();
       closeAuthModal();
-      if (wasAdminTab) switchTab('home');
+      switchTab('home');
       showBanner('👤 로그아웃 완료', '게스트 모드로 전환되었습니다.');
     }
 
     function restoreSavedSession() {
-      ensureAdminAccountExists();
       const savedUser = localStorage.getItem(STORAGE_KEYS.currentUser);
       if (!savedUser) {
         updateAccountPointsUI();
         return;
       }
-      const normalizedUser = isAdminUsername(savedUser) ? ADMIN_PRIMARY_ID : savedUser;
+      if (Object.prototype.hasOwnProperty.call(ADMIN_CREDENTIALS, savedUser)) {
+        activateAdminSession(savedUser);
+        updateAccountPointsUI();
+        return;
+      }
       const db = getUsersDatabase();
-      if (db[normalizedUser]) {
-        game.account.username = normalizedUser;
-        game.account.isAdmin = isAdminUsername(normalizedUser) || !!db[normalizedUser].isAdmin;
-        game.account.points = db[normalizedUser].points ?? 300;
-        game.account.unlockedTeams = Array.isArray(db[normalizedUser].unlockedTeams) ? db[normalizedUser].unlockedTeams : [...DEFAULT_UNLOCKED_TEAMS];
-        game.account.upgrades = db[normalizedUser].upgrades || { power: 1, contact: 1, pitch: 1, stamina: 1 };
-        if (db[normalizedUser].awayTeamId && game.account.unlockedTeams.includes(db[normalizedUser].awayTeamId)) {
-          game.awayTeamId = db[normalizedUser].awayTeamId;
+      if (db[savedUser]) {
+        game.account.username = savedUser;
+        game.account.isAdmin = false;
+        game.account.points = db[savedUser].points ?? 300;
+        game.account.unlockedTeams = Array.isArray(db[savedUser].unlockedTeams) ? db[savedUser].unlockedTeams : [...DEFAULT_UNLOCKED_TEAMS];
+        game.account.upgrades = db[savedUser].upgrades || { power: 1, contact: 1, pitch: 1, stamina: 1 };
+        if (db[savedUser].awayTeamId && game.account.unlockedTeams.includes(db[savedUser].awayTeamId)) {
+          game.awayTeamId = db[savedUser].awayTeamId;
         } else {
           game.awayTeamId = 'KIA';
-        }
-        if (game.account.isAdmin) {
-          game.unlocked = true;
-          document.getElementById('lock-game-badge').textContent = '🔓';
         }
       }
       updateAccountPointsUI();
     }
 
-    // ================= 3-2. 👑 운영진 전용 회원 관리 함수 (Han / 0724 전용) =================
+    // ================= 3-0. 운영진 회원 관리 기능 =================
     function renderAdminDashboard() {
       if (!game.account.isAdmin) return;
+      const listEl = document.getElementById('admin-members-list');
+      if (!listEl) return;
       const db = getUsersDatabase();
       const usernames = Object.keys(db);
-      const countEl = document.getElementById('admin-member-count');
-      const listEl = document.getElementById('admin-members-list');
-      if (countEl) countEl.textContent = usernames.length;
-
-      if (listEl) {
-        listEl.innerHTML = usernames.map(uname => {
-          const u = db[uname];
-          const isMaster = isAdminUsername(uname);
-          const upg = u.upgrades || { power: 1, contact: 1, pitch: 1, stamina: 1 };
-          const unlockedCnt = Array.isArray(u.unlockedTeams) ? u.unlockedTeams.length : DEFAULT_UNLOCKED_TEAMS.length;
-          return `
-            <div class="bg-slate-950/85 border ${isMaster ? 'border-rose-400/50' : 'border-white/10'} rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3">
-              <div class="space-y-1">
-                <div class="flex items-center gap-2">
-                  <span class="font-black text-sm text-white">${isMaster ? '👑 ' : '👤 '}${uname}</span>
-                  <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] font-bold">PIN: ${u.pin}</span>
-                  <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[11px] font-black">🪙 ${u.points ?? 0} PT</span>
-                </div>
-                <div class="text-[11px] text-slate-400">
-                  보유 구단: ${unlockedCnt}/${KBO_TEAMS.length}팀 · 강화: 파워 Lv.${upg.power} / 콘택트 Lv.${upg.contact} / 구속 Lv.${upg.pitch} / 체력 Lv.${upg.stamina}
-                </div>
-              </div>
-
-              <div class="flex flex-wrap items-center gap-1.5">
-                <button onclick="adminAdjustPoints('${uname}', 300)" class="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-300 font-black text-xs">+300 PT</button>
-                <button onclick="adminAdjustPoints('${uname}', -300)" class="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-300 font-black text-xs">-300 PT</button>
-                <button onclick="adminMaxMember('${uname}')" class="px-2.5 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-300 font-black text-xs">⚡ 풀강화·전구단</button>
-                <button onclick="adminResetPin('${uname}')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs">🔑 PIN 초기화</button>
-                ${!isMaster ? `<button onclick="adminDeleteMember('${uname}')" class="px-2.5 py-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-500 text-white font-black text-xs">삭제</button>` : ''}
-              </div>
-            </div>`;
-        }).join('');
+      if (usernames.length === 0) {
+        listEl.innerHTML = `<div class="text-center py-8 text-xs text-slate-400 bg-slate-950/60 rounded-xl border border-white/10">아직 가입된 일반 회원이 없습니다. 상단에서 회원을 직접 발급하거나 방문자 회원가입을 받아보세요!</div>`;
+        return;
       }
 
-      const rankAdminList = document.getElementById('admin-rankings-list');
-      if (rankAdminList) {
-        if (!game.rankings.length) {
-          rankAdminList.innerHTML = `<div class="text-xs text-slate-400 py-3">등록된 랭킹 기록이 없습니다.</div>`;
-        } else {
-          rankAdminList.innerHTML = game.rankings.map((r, idx) => `
-            <div class="flex items-center justify-between bg-slate-950/70 border border-white/10 rounded-xl px-3.5 py-2 text-xs">
-              <div>
-                <span class="font-black text-amber-300 mr-2">#${idx + 1}</span>
-                <span class="font-bold text-white">${r.nick}</span>
-                <span class="text-slate-400 ml-1">(${r.team} · 경기 ${r.score} · 클래시 ${r.clash}점)</span>
+      listEl.innerHTML = usernames.map(u => {
+        const info = db[u];
+        const upg = info.upgrades || { power: 1, contact: 1, pitch: 1, stamina: 1 };
+        const teamsCount = Array.isArray(info.unlockedTeams) ? info.unlockedTeams.length : 1;
+        return `
+          <div class="bg-slate-950/80 border border-white/10 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="font-black text-sm text-white">👤 ${u}</span>
+                <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] font-bold">PIN: ${info.pin}</span>
+                <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[11px] font-black">🪙 ${info.points ?? 0} PT</span>
+                <span class="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 text-[11px] font-bold">구단 ${teamsCount}/${KBO_TEAMS.length}</span>
               </div>
-              <button onclick="adminDeleteRankingAt(${idx})" class="px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-500 text-white font-bold text-[11px]">기록 삭제</button>
-            </div>`).join('');
-        }
-      }
-    }
-
-    function setAdminMsg(text) {
-      const el = document.getElementById('admin-status-msg');
-      if (el) el.textContent = text;
+              <div class="text-[11px] text-slate-400">
+                강화: 파워 Lv.${upg.power} · 콘택트 Lv.${upg.contact} · 구속 Lv.${upg.pitch} · 스태미나 Lv.${upg.stamina}
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button onclick="adminAdjustPoints('${u}', 300)" class="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-300 text-xs font-black">+300 PT</button>
+              <button onclick="adminAdjustPoints('${u}', -300)" class="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-300 text-xs font-black">-300 PT</button>
+              <button onclick="adminMaxUnlockMember('${u}')" class="px-2.5 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-300 text-xs font-black">⚡ 풀강화·전구단</button>
+              <button onclick="adminResetPin('${u}')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">🔑 PIN 0000</button>
+              <button onclick="adminDeleteMember('${u}')" class="px-2.5 py-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-500 text-white text-xs font-black">삭제</button>
+            </div>
+          </div>`;
+      }).join('');
     }
 
     function adminCreateMember() {
       if (!game.account.isAdmin) return;
-      const uname = (document.getElementById('admin-new-id').value || '').trim();
-      const pin = (document.getElementById('admin-new-pin').value || '').trim() || '1234';
-      const pts = Math.max(0, Number(document.getElementById('admin-new-pts').value) || 300);
-      if (!uname || uname.length < 2) {
-        setAdminMsg('❌ 신규 회원 아이디를 2글자 이상 입력해 주세요.');
+      const username = (document.getElementById('admin-new-user').value || '').trim();
+      const pin = (document.getElementById('admin-new-pin').value || '').trim();
+      const pts = parseInt(document.getElementById('admin-new-pts').value, 10) || 300;
+      const msg = document.getElementById('admin-status-msg');
+
+      if (!username || username.length < 2) {
+        msg.textContent = '❌ 아이디를 2글자 이상 입력하세요.';
         return;
       }
       if (!/^\d{4,6}$/.test(pin)) {
-        setAdminMsg('❌ PIN은 숫자 4~6자리로 입력해 주세요.');
+        msg.textContent = '❌ PIN은 숫자 4~6자리여야 합니다.';
         return;
       }
       const db = getUsersDatabase();
-      db[uname] = {
+      if (db[username] || Object.prototype.hasOwnProperty.call(ADMIN_CREDENTIALS, username)) {
+        msg.textContent = '❌ 이미 존재하는 아이디입니다.';
+        return;
+      }
+
+      db[username] = {
         pin,
-        isAdmin: isAdminUsername(uname),
-        points: pts,
+        points: Math.max(0, pts),
         unlockedTeams: [...DEFAULT_UNLOCKED_TEAMS],
         upgrades: { power: 1, contact: 1, pitch: 1, stamina: 1 },
-        awayTeamId: 'KIA'
+        awayTeamId: 'KIA',
+        createdAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+        updatedAt: Date.now()
       };
       saveUsersDatabase(db);
-      document.getElementById('admin-new-id').value = '';
+      pushBoothStateToCloud();
+      document.getElementById('admin-new-user').value = '';
       document.getElementById('admin-new-pin').value = '';
-      setAdminMsg(`✅ 회원 [${uname}] (PIN: ${pin}, 보유 ${pts} PT) 등록 완료!`);
+      msg.textContent = `✅ [${username}] 회원 계정이 발급되고 클라우드 방에 동기화되었습니다!`;
       renderAdminDashboard();
     }
 
-    function adminAdjustPoints(uname, delta) {
+    function adminAdjustPoints(username, delta) {
       if (!game.account.isAdmin) return;
       const db = getUsersDatabase();
-      if (!db[uname]) return;
-      db[uname].points = Math.max(0, (db[uname].points || 0) + delta);
+      if (!db[username]) return;
+      db[username].points = Math.max(0, (db[username].points || 0) + delta);
+      db[username].updatedAt = Date.now();
       saveUsersDatabase(db);
-      if (game.account.username === uname) {
-        game.account.points = db[uname].points;
-        updateAccountPointsUI();
+      pushBoothStateToCloud();
+      document.getElementById('admin-status-msg').textContent = `✅ [${username}] 포인트 ${delta >= 0 ? '+' + delta : delta} PT 적용 완료`;
+      renderAdminDashboard();
+    }
+
+    function adminMaxUnlockMember(username) {
+      if (!game.account.isAdmin) return;
+      const db = getUsersDatabase();
+      if (!db[username]) return;
+      db[username].unlockedTeams = KBO_TEAMS.map(t => t.id);
+      db[username].upgrades = { power: 10, contact: 10, pitch: 10, stamina: 10 };
+      db[username].updatedAt = Date.now();
+      saveUsersDatabase(db);
+      pushBoothStateToCloud();
+      document.getElementById('admin-status-msg').textContent = `⚡ [${username}] 전 구단 해금 & 스탯 Lv.10 풀강화 완료!`;
+      renderAdminDashboard();
+    }
+
+    function adminResetPin(username) {
+      if (!game.account.isAdmin) return;
+      const db = getUsersDatabase();
+      if (!db[username]) return;
+      db[username].pin = '0000';
+      db[username].updatedAt = Date.now();
+      saveUsersDatabase(db);
+      pushBoothStateToCloud();
+      document.getElementById('admin-status-msg').textContent = `🔑 [${username}] 비밀번호가 0000으로 초기화되었습니다.`;
+      renderAdminDashboard();
+    }
+
+    function adminDeleteMember(username) {
+      if (!game.account.isAdmin) return;
+      const db = getUsersDatabase();
+      delete db[username];
+      saveUsersDatabase(db);
+      pushBoothStateToCloud();
+      document.getElementById('admin-status-msg').textContent = `🗑️ [${username}] 회원 계정이 삭제되었습니다.`;
+      renderAdminDashboard();
+    }
+
+    // ================= 3-0-B. 실시간 랭킹 등록 및 렌더링 =================
+    function calculateMyTotalRankScore() {
+      const pts = game.account.isAdmin ? 0 : (game.account.points || 0);
+      return (game.homers * 100) + (game.hrClash.points * 10) + (game.hits * 25) + pts;
+    }
+
+    function updateRankingPreviewUI() {
+      const nickInput = document.getElementById('rank-nickname-input');
+      if (nickInput && game.account.username && !nickInput.value) {
+        nickInput.value = game.account.username;
       }
-      setAdminMsg(`✅ [${uname}] 님 포인트 ${delta > 0 ? '+' + delta : delta} PT 반영 완료 (현재 ${db[uname].points} PT)`);
-      renderAdminDashboard();
-    }
-
-    function adminMaxMember(uname) {
-      if (!game.account.isAdmin) return;
-      const db = getUsersDatabase();
-      if (!db[uname]) return;
-      db[uname].unlockedTeams = KBO_TEAMS.map(t => t.id);
-      db[uname].upgrades = { power: 10, contact: 10, pitch: 10, stamina: 10 };
-      db[uname].points = Math.max(db[uname].points || 0, 5000);
-      saveUsersDatabase(db);
-      if (game.account.username === uname) {
-        game.account.unlockedTeams = [...db[uname].unlockedTeams];
-        game.account.upgrades = { ...db[uname].upgrades };
-        game.account.points = db[uname].points;
-        updateAccountPointsUI();
-        renderTeamsGrid();
-        renderUpgradeShop();
+      const prevEl = document.getElementById('my-current-record-preview');
+      if (prevEl) {
+        const ptsText = game.account.isAdmin ? 'ADMIN' : `${game.account.points} PT`;
+        prevEl.textContent = `홈런 ${game.homers}개 · 클래시 ${game.hrClash.points}점 · ${ptsText} (종합 ${calculateMyTotalRankScore()}점)`;
       }
-      setAdminMsg(`⚡ [${uname}] 님 전 구단 해금 + 모든 스탯 Lv.10 풀강화 완료!`);
-      renderAdminDashboard();
     }
 
-    function adminUnlockAllForMe() {
-      adminMaxMember(ADMIN_PRIMARY_ID);
+    async function submitRankingRecord() {
+      const nickInput = document.getElementById('rank-nickname-input');
+      const statusEl = document.getElementById('ranking-status-msg');
+      const rawNick = (nickInput?.value || game.account.username || '').trim();
+      if (!rawNick || rawNick.length < 2) {
+        if (statusEl) statusEl.textContent = '❌ 랭킹에 등록할 닉네임을 2글자 이상 입력해 주세요!';
+        return;
+      }
+
+      const awayObj = KBO_TEAMS.find(t => t.id === game.awayTeamId) || KBO_TEAMS[0];
+      const totalScore = calculateMyTotalRankScore();
+      const list = getRankingsDatabase();
+      const existingIdx = list.findIndex(r => r.nickname === rawNick);
+      const bestScore = existingIdx >= 0 ? Math.max(list[existingIdx].totalScore || 0, totalScore) : totalScore;
+
+      const entry = {
+        nickname: rawNick,
+        teamName: awayObj.name,
+        homers: existingIdx >= 0 ? Math.max(list[existingIdx].homers || 0, game.homers) : game.homers,
+        clashPoints: existingIdx >= 0 ? Math.max(list[existingIdx].clashPoints || 0, game.hrClash.points) : game.hrClash.points,
+        points: game.account.isAdmin ? 9999 : game.account.points,
+        totalScore: bestScore,
+        updatedAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+      };
+
+      if (existingIdx >= 0) list[existingIdx] = entry;
+      else list.push(entry);
+
+      list.sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
+      saveRankingsDatabase(list);
+      renderRankingsList();
+      if (statusEl) statusEl.textContent = `🚀 [${rawNick}] 님의 기록(종합 ${bestScore}점)이 랭킹에 등록되었습니다!`;
+      await pushBoothStateToCloud();
     }
 
-    function adminResetPin(uname) {
+    function adminDeleteRanking(nickname) {
       if (!game.account.isAdmin) return;
-      const db = getUsersDatabase();
-      if (!db[uname]) return;
-      db[uname].pin = isAdminUsername(uname) ? ADMIN_PIN : '0000';
-      saveUsersDatabase(db);
-      setAdminMsg(`🔑 [${uname}] 님의 비밀번호가 [${db[uname].pin}] 로 초기화되었습니다.`);
-      renderAdminDashboard();
+      const list = getRankingsDatabase().filter(r => r.nickname !== nickname);
+      saveRankingsDatabase(list);
+      renderRankingsList();
+      pushBoothStateToCloud();
     }
 
-    function adminDeleteMember(uname) {
-      if (!game.account.isAdmin || isAdminUsername(uname)) return;
-      const db = getUsersDatabase();
-      delete db[uname];
-      saveUsersDatabase(db);
-      setAdminMsg(`🗑️ 회원 [${uname}] 계정이 삭제되었습니다.`);
-      renderAdminDashboard();
+    function renderRankingsList() {
+      const container = document.getElementById('ranking-list-container');
+      if (!container) return;
+      const list = getRankingsDatabase().sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
+      if (list.length === 0) {
+        container.innerHTML = `<div class="text-center py-8 text-xs text-slate-400 bg-slate-950/60 rounded-xl border border-white/10">아직 등록된 랭킹이 없습니다. 닉네임을 입력하고 첫 번째 1위 주인공이 되어보세요!</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map((r, idx) => {
+        const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+        const highlight = idx === 0 ? 'border-amber-400/60 bg-amber-500/10' : 'border-white/10 bg-slate-950/75';
+        return `
+          <div class="rounded-xl p-3.5 border ${highlight} flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-3">
+              <span class="text-base font-black w-8 text-center text-amber-300">${medal}</span>
+              <div>
+                <div class="font-black text-sm text-white flex items-center gap-2">
+                  <span>${r.nickname}</span>
+                  <span class="text-[11px] font-bold px-2 py-0.5 rounded bg-white/10 text-slate-300">${r.teamName || 'KIA 타이거즈'}</span>
+                </div>
+                <div class="text-[11px] text-slate-400">홈런 ${r.homers || 0}개 · 클래시 ${r.clashPoints || 0}점 · 등록 ${r.updatedAt || ''}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="px-3 py-1 rounded-lg bg-amber-500/20 text-amber-300 font-black text-xs">종합 ${r.totalScore || 0}점</span>
+              ${game.account.isAdmin ? `<button onclick="adminDeleteRanking('${r.nickname}')" class="px-2 py-1 rounded bg-rose-600/80 hover:bg-rose-500 text-white text-[11px] font-bold">삭제</button>` : ''}
+            </div>
+          </div>`;
+      }).join('');
     }
 
-    async function adminDeleteRankingAt(idx) {
-      if (!game.account.isAdmin) return;
-      game.rankings.splice(idx, 1);
-      saveLocalRankings(game.rankings);
-      renderRankings();
-      renderAdminDashboard();
-      setAdminMsg('🗑️ 선택한 랭킹 기록이 삭제되었습니다.');
-      try {
-        await fetch(getActiveBlobUrl(), {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ rankings: game.rankings })
-        });
-      } catch (e) {}
-    }
-
-    async function adminClearAllRankings() {
-      if (!game.account.isAdmin) return;
-      game.rankings = [];
-      saveLocalRankings([]);
-      renderRankings();
-      renderAdminDashboard();
-      setAdminMsg('🗑️ 전체 랭킹 명예의 전당이 초기화되었습니다.');
-      try {
-        await fetch(getActiveBlobUrl(), {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ rankings: [] })
-        });
-      } catch (e) {}
-    }
-
-    // ================= 3-3. 선수 강화 상점 렌더링 & 구매 =================
+    // ================= 3-1. 선수 강화 상점 & 구단 영입 그리드 렌더링 =================
     const UPGRADE_ITEMS = [
       { key: 'power', icon: '💪', name: '타자 파워 강화', desc: '배럴 홈런 판정 구간 및 홈런 확률을 대폭 상승시킵니다.', statUnit: '+4% 홈런 파워' },
       { key: 'contact', icon: '🎯', name: '타자 콘택트 강화', desc: '배트 스윗스팟 타격 존과 안타/장타 확률을 넓혀줍니다.', statUnit: '+4% 정밀 콘택트' },
@@ -1173,20 +1527,101 @@
       const curLvl = game.account.upgrades[key] || 1;
       if (curLvl >= 10) return;
       const cost = curLvl * 80;
-      if (game.account.points < cost) {
+      if (!game.account.isAdmin && game.account.points < cost) {
         showBanner('🪙 포인트 부족!', `강화 비용 ${cost} PT가 필요합니다. 경기나 홈런 클래시로 포인트를 모아보세요!`);
         broadcastCommentary(`포인트가 부족합니다! (필요: ${cost} PT, 보유: ${game.account.points} PT)`, false);
         return;
       }
-      game.account.points -= cost;
+      if (!game.account.isAdmin) game.account.points -= cost;
       game.account.upgrades[key] = curLvl + 1;
       persistCurrentAccount();
       renderUpgradeShop();
       updateScoreboardUI();
       playTone(587, 0.12, 'triangle', 0.16);
       setTimeout(() => playTone(880, 0.18, 'triangle', 0.16), 90);
-      showBanner(`⚡ 강화 성공! (Lv.${curLvl + 1})`, `남은 보유 포인트: ${game.account.points} PT`);
+      showBanner(`⚡ 강화 성공! (Lv.${curLvl + 1})`, `남은 보유 포인트: ${game.account.isAdmin ? '∞' : game.account.points + ' PT'}`);
       broadcastCommentary(`선수 능력이 레벨 ${curLvl + 1}로 강화되었습니다!`, true);
+    }
+
+    function renderTeamsGrid() {
+      const grid = document.getElementById('teams-grid');
+      if (!grid) return;
+      updateAccountPointsUI();
+      grid.innerHTML = KBO_TEAMS.map(t => {
+        const isUnlocked = game.account.isAdmin || t.cost === 0 || game.account.unlockedTeams.includes(t.id);
+        const isAway = game.awayTeamId === t.id;
+        const isHome = game.homeTeamId === t.id;
+        const hexPrimary = '#' + t.primary.toString(16).padStart(6, '0');
+        return `
+          <div class="glass rounded-2xl p-4 flex flex-col justify-between gap-3 border ${isAway ? 'border-rose-400/70' : isHome ? 'border-sky-400/70' : 'border-white/10'}">
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-[11px] font-bold px-2 py-0.5 rounded bg-white/10 text-slate-300">${t.category}</span>
+                <span class="text-[11px] font-black px-2 py-0.5 rounded ${isUnlocked ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}">
+                  ${isUnlocked ? '✅ 보유 중' : `🔒 ${t.cost} PT`}
+                </span>
+              </div>
+              <div class="flex items-center gap-2 pt-0.5">
+                <span class="w-4 h-4 rounded-full border border-white/30" style="background:${hexPrimary}"></span>
+                <h3 class="font-black text-sm text-white">${t.name}</h3>
+              </div>
+              <p class="text-[11px] text-slate-400">🎵 ${t.chant}</p>
+            </div>
+            <div class="flex flex-wrap gap-1.5 pt-1">
+              ${isUnlocked
+                ? `<button onclick="selectTeam('away', '${t.id}')" class="flex-1 py-2 rounded-xl text-xs font-black ${isAway ? 'bg-rose-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}">${isAway ? '✔ 1P 출전중' : '1P 팀 선택'}</button>`
+                : `<button onclick="unlockTeamWithPoints('${t.id}')" class="flex-1 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 shadow">🪙 ${t.cost} PT 영입</button>`
+              }
+              <button onclick="selectTeam('home', '${t.id}')" class="px-2.5 py-2 rounded-xl text-xs font-bold ${isHome ? 'bg-sky-500 text-slate-950 font-black' : 'bg-slate-900 hover:bg-slate-800 text-slate-300'}">${isHome ? '✔ 상대팀' : '상대지정'}</button>
+              <button onclick="previewTeamChant('${t.id}')" class="px-2.5 py-2 rounded-xl text-xs font-bold bg-purple-500/20 hover:bg-purple-500/30 text-purple-300">🎵</button>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function unlockTeamWithPoints(id) {
+      const team = KBO_TEAMS.find(t => t.id === id);
+      if (!team) return;
+      if (game.account.unlockedTeams.includes(id)) return;
+      if (!game.account.isAdmin && game.account.points < team.cost) {
+        showBanner('🪙 포인트 부족!', `[${team.name}] 영입에는 ${team.cost} PT가 필요합니다. (현재 ${game.account.points} PT)`);
+        broadcastCommentary(`${team.name} 영입 포인트(${team.cost} PT)가 부족합니다!`, false);
+        return;
+      }
+      if (!game.account.isAdmin) game.account.points -= team.cost;
+      game.account.unlockedTeams.push(id);
+      game.awayTeamId = id;
+      persistCurrentAccount();
+      selectTeam('away', id);
+      playTone(523, 0.12, 'triangle', 0.16);
+      setTimeout(() => playTone(784, 0.2, 'triangle', 0.16), 90);
+      showBanner(`🎉 [${team.name}] 영입 완료!`, `1P 출전 팀으로 자동 배치되었습니다! (남은 포인트: ${game.account.isAdmin ? '∞' : game.account.points + ' PT'})`);
+      broadcastCommentary(`${team.name} 구단 영입에 성공하여 1P 출전 라인업으로 선택되었습니다!`, true);
+    }
+
+    function selectTeam(side, id) {
+      const team = KBO_TEAMS.find(t => t.id === id);
+      if (side === 'away' && team && team.cost > 0 && !game.account.isAdmin && !game.account.unlockedTeams.includes(id)) {
+        unlockTeamWithPoints(id);
+        return;
+      }
+      if (side === 'away') game.awayTeamId = id;
+      else game.homeTeamId = id;
+      const awayObj = KBO_TEAMS.find(t => t.id === game.awayTeamId);
+      const homeObj = KBO_TEAMS.find(t => t.id === game.homeTeamId);
+      document.getElementById('selected-away-label').textContent = awayObj.name;
+      document.getElementById('selected-home-label').textContent = homeObj.name;
+      persistCurrentAccount();
+      renderTeamsGrid();
+      if (renderer) syncTeamColorsOnField();
+      updateScoreboardUI();
+    }
+
+    function previewTeamChant(id) {
+      const t = KBO_TEAMS.find(x => x.id === id);
+      if (!t) return;
+      t.freq.forEach((f, idx) => setTimeout(() => playTone(f, 0.18, 'triangle', 0.15), idx * 170));
+      broadcastCommentary(`${t.name} 응원가! "${t.chant}"`, true);
     }
 
     let audioCtx = null;
@@ -1238,12 +1673,12 @@
       el.classList.add('banner-anim');
     }
 
-    // ================= 4. 비밀번호 즉시 잠금 해제 (0724) =================
+    // ================= 4. 비밀번호 즉시 잠금 해제 =================
     function unlockWithPasscode(inputId) {
       const input = document.getElementById(inputId);
       const val = (input.value || '').trim();
       const msgIds = ['home-passcode-msg', 'locked-passcode-msg', 'quiz-passcode-msg'];
-      if (val === '0724') {
+      if (val === '2026') {
         game.unlocked = true;
         document.getElementById('lock-game-badge').textContent = '🔓';
         const st = document.getElementById('home-unlock-status');
@@ -1254,11 +1689,11 @@
         broadcastCommentary('프리패스 비밀번호 확인! 야구 게임과 홈런 클래시가 즉시 잠금 해제되었습니다!', true);
         switchTab('game');
       } else {
-        msgIds.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '❌ 비밀번호가 올바르지 않습니다. 다시 확인해 주세요.'; });
+        msgIds.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '❌ 비밀번호가 올바르지 않습니다. (힌트: 올해 연도 4자리 또는 야구 퀴즈 2문제 통과!)'; });
       }
     }
 
-    // ================= 5. 자동 공격 / 자동 수비 토글 & 난이도 변경 =================
+    // ================= 5. 자동 공격 / 자동 수비 토글 & 탭 전환 =================
     function toggleAutoOffense() {
       game.autoOffense = !game.autoOffense;
       const btn = document.getElementById('btn-auto-offense');
@@ -1341,12 +1776,7 @@
     }
 
     function switchTab(tab) {
-      if (tab === 'admin' && !game.account.isAdmin) {
-        openAuthModal('login');
-        return;
-      }
-
-      ['home', 'game', 'upgrade', 'teams', 'quiz', 'ranking', 'qr', 'admin'].forEach(t => {
+      ['home', 'game', 'upgrade', 'teams', 'ranking', 'quiz', 'qr', 'admin'].forEach(t => {
         const sec = document.getElementById(`tab-${t}`);
         const nav = document.getElementById(`nav-${t}`);
         if (sec) sec.classList.toggle('hidden', t !== tab);
@@ -1368,97 +1798,18 @@
         renderTeamsGrid();
       } else if (tab === 'upgrade') {
         renderUpgradeShop();
+      } else if (tab === 'ranking') {
+        updateRankingPreviewUI();
+        renderRankingsList();
+        syncFromCloudServer(true);
       } else if (tab === 'quiz') {
         renderQuiz();
-      } else if (tab === 'ranking') {
-        loadRankings();
+      } else if (tab === 'qr') {
+        refreshQrCode();
       } else if (tab === 'admin') {
         renderAdminDashboard();
+        syncFromCloudServer(true);
       }
-    }
-
-    function renderTeamsGrid() {
-      const grid = document.getElementById('teams-grid');
-      updateAccountPointsUI();
-      grid.innerHTML = KBO_TEAMS.map(t => {
-        const isUnlocked = t.cost === 0 || game.account.unlockedTeams.includes(t.id);
-        const isAway = game.awayTeamId === t.id;
-        const isHome = game.homeTeamId === t.id;
-        const hex = '#' + t.primary.toString(16).padStart(6, '0');
-        return `
-          <div class="glass rounded-2xl p-4 flex flex-col justify-between gap-3 border ${isAway ? 'border-rose-400' : isHome ? 'border-sky-400' : isUnlocked ? 'border-white/10' : 'border-amber-500/30'}">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2.5">
-                <span class="w-4 h-4 rounded-full inline-block border border-white/40" style="background:${hex}"></span>
-                <div>
-                  <div class="font-black text-sm flex items-center gap-1.5">
-                    <span>${t.name}</span>
-                    ${!isUnlocked ? `<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px]">🔒 ${t.cost} PT</span>` : ''}
-                  </div>
-                  <div class="text-[11px] text-slate-400">${t.category}</div>
-                </div>
-              </div>
-              <button onclick="previewTeamChant('${t.id}')" class="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold">🎵 응원가</button>
-            </div>
-            <div class="text-xs text-slate-300 bg-slate-950/60 rounded-lg px-2.5 py-1.5">${t.chant}</div>
-            ${isUnlocked ? `
-              <div class="grid grid-cols-2 gap-2">
-                <button onclick="selectTeam('away', '${t.id}')" class="py-1.5 rounded-xl text-xs font-black ${isAway ? 'bg-rose-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}">1P 팀 선택</button>
-                <button onclick="selectTeam('home', '${t.id}')" class="py-1.5 rounded-xl text-xs font-black ${isHome ? 'bg-sky-500 text-slate-950' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}">상대 팀 선택</button>
-              </div>
-            ` : `
-              <div class="grid grid-cols-2 gap-2">
-                <button onclick="unlockTeamWithPoints('${t.id}')" class="py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-orange-500 hover:brightness-110 text-slate-950 shadow">🪙 ${t.cost} PT 영입</button>
-                <button onclick="selectTeam('home', '${t.id}')" class="py-1.5 rounded-xl text-xs font-black ${isHome ? 'bg-sky-500 text-slate-950' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}">상대 팀 배치</button>
-              </div>
-            `}
-          </div>`;
-      }).join('');
-    }
-
-    function unlockTeamWithPoints(id) {
-      const team = KBO_TEAMS.find(t => t.id === id);
-      if (!team) return;
-      if (game.account.unlockedTeams.includes(id)) return;
-      if (game.account.points < team.cost) {
-        showBanner('🪙 포인트 부족!', `[${team.name}] 영입에는 ${team.cost} PT가 필요합니다. (현재 ${game.account.points} PT)`);
-        broadcastCommentary(`${team.name} 영입 포인트(${team.cost} PT)가 부족합니다!`, false);
-        return;
-      }
-      game.account.points -= team.cost;
-      game.account.unlockedTeams.push(id);
-      game.awayTeamId = id;
-      persistCurrentAccount();
-      selectTeam('away', id);
-      playTone(523, 0.12, 'triangle', 0.16);
-      setTimeout(() => playTone(784, 0.2, 'triangle', 0.16), 90);
-      showBanner(`🎉 [${team.name}] 영입 완료!`, `1P 출전 팀으로 자동 배치되었습니다! (남은 포인트: ${game.account.points} PT)`);
-      broadcastCommentary(`${team.name} 구단 영입에 성공하여 1P 출전 라인업으로 선택되었습니다!`, true);
-    }
-
-    function selectTeam(side, id) {
-      const team = KBO_TEAMS.find(t => t.id === id);
-      if (side === 'away' && team && team.cost > 0 && !game.account.unlockedTeams.includes(id)) {
-        unlockTeamWithPoints(id);
-        return;
-      }
-      if (side === 'away') game.awayTeamId = id;
-      else game.homeTeamId = id;
-      const awayObj = KBO_TEAMS.find(t => t.id === game.awayTeamId);
-      const homeObj = KBO_TEAMS.find(t => t.id === game.homeTeamId);
-      document.getElementById('selected-away-label').textContent = awayObj.name;
-      document.getElementById('selected-home-label').textContent = homeObj.name;
-      persistCurrentAccount();
-      renderTeamsGrid();
-      if (renderer) syncTeamColorsOnField();
-      updateScoreboardUI();
-    }
-
-    function previewTeamChant(id) {
-      const t = KBO_TEAMS.find(x => x.id === id);
-      if (!t) return;
-      t.freq.forEach((f, idx) => setTimeout(() => playTone(f, 0.18, 'triangle', 0.15), idx * 170));
-      broadcastCommentary(`${t.name} 응원가! "${t.chant}"`, true);
     }
 
     let currentQuizSet = [];
@@ -1498,615 +1849,6 @@
         setTimeout(() => switchTab('game'), 750);
       } else {
         res.textContent = `아쉽습니다! (${correct}/3 정답) 2문항 이상 맞히면 바로 열립니다.`;
-      }
-    }
-
-    // ================= 5-2. 공용 실시간 랭킹 =================
-    function saveLocalRankings(list) {
-      try {
-        localStorage.setItem(STORAGE_KEYS.rankings, JSON.stringify(list.slice(0, 50)));
-      } catch (e) {}
-    }
-
-    function getLocalRankings() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEYS.rankings);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch (e) {
-        return [];
-      }
-    }
-
-    function mergeAndSortRankings(listA, listB = []) {
-      const map = new Map();
-      [...listA, ...listB].forEach(item => {
-        if (!item || !item.nick) return;
-        const key = item.id || `${item.nick}_${item.score}_${item.clash}_${item.time}`;
-        map.set(key, item);
-      });
-      return Array.from(map.values()).sort((a, b) => {
-        const scoreA = (Number(a.clash) || 0) + (Number(a.hr) || 0) * 15 + (Number(a.awayScore) || 0) * 10;
-        const scoreB = (Number(b.clash) || 0) + (Number(b.hr) || 0) * 15 + (Number(b.awayScore) || 0) * 10;
-        return scoreB - scoreA;
-      }).slice(0, 50);
-    }
-
-    function getActiveBlobUrl() {
-      return localStorage.getItem(STORAGE_KEYS.dynamicBlobUrl) || PUBLIC_BLOB_URL;
-    }
-
-    async function loadRankings() {
-      game.rankings = mergeAndSortRankings(getLocalRankings());
-      renderRankings();
-      await fetchCloudRankings(false);
-    }
-
-    async function fetchCloudRankings(showToast = false) {
-      const msgEl = document.getElementById('ranking-status-msg');
-      const badge = document.getElementById('ranking-sync-badge');
-      const url = getActiveBlobUrl();
-
-      try {
-        if (showToast && msgEl) msgEl.textContent = '☁️ 공용 서버에서 최신 랭킹을 불러오는 중...';
-        const res = await fetch(url, {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' }
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const remoteList = Array.isArray(data?.rankings) ? data.rankings : [];
-          game.rankings = mergeAndSortRankings(remoteList, getLocalRankings());
-          saveLocalRankings(game.rankings);
-          renderRankings();
-          if (badge) {
-            badge.textContent = '☁️ 실시간 공용 서버 동기화됨';
-            badge.className = 'px-2 py-0.5 rounded-full text-[11px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40';
-          }
-          if (showToast && msgEl) msgEl.textContent = `✅ 공용 서버 실시간 랭킹 동기화 완료! (총 ${game.rankings.length}명)`;
-          return;
-        }
-      } catch (e) {}
-
-      game.rankings = mergeAndSortRankings(getLocalRankings());
-      renderRankings();
-      if (showToast && msgEl) msgEl.textContent = '💾 현재 기기 영구 랭킹과 동기화되었습니다.';
-    }
-
-    async function registerCurrentRecord() {
-      const nickInput = document.getElementById('player-nickname');
-      const nick = (nickInput.value || '').trim();
-      const msgEl = document.getElementById('ranking-status-msg');
-      const btn = document.getElementById('btn-register-rank');
-
-      if (!nick) {
-        msgEl.textContent = '✏️ 먼저 닉네임을 입력해 주세요!';
-        nickInput.focus();
-        return;
-      }
-
-      const awayObj = KBO_TEAMS.find(t => t.id === game.awayTeamId);
-      const cfg = getLevelCfg();
-
-      const newEntry = {
-        id: Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-        nick,
-        team: awayObj.name,
-        levelLabel: cfg.shortLabel,
-        awayScore: game.awayScore,
-        homeScore: game.homeScore,
-        score: `${game.awayScore} : ${game.homeScore}`,
-        hr: game.homers,
-        clash: game.hrClash.points,
-        time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-      };
-
-      btn.disabled = true;
-      btn.textContent = '등록 중...';
-
-      game.rankings = mergeAndSortRankings([newEntry], getLocalRankings());
-      saveLocalRankings(game.rankings);
-      renderRankings();
-
-      const url = getActiveBlobUrl();
-      try {
-        let serverList = [];
-        const getRes = await fetch(url, { headers: { 'Accept': 'application/json' } });
-        if (getRes.ok) {
-          const data = await getRes.json();
-          if (Array.isArray(data?.rankings)) serverList = data.rankings;
-          const merged = mergeAndSortRankings([newEntry], serverList, getLocalRankings());
-          const putRes = await fetch(url, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ rankings: merged })
-          });
-          if (putRes.ok) {
-            game.rankings = merged;
-            saveLocalRankings(merged);
-            renderRankings();
-            msgEl.textContent = `🎉 [${nick}] 님의 기록이 공용 실시간 랭킹 서버에 자동 등록되었습니다!`;
-            nickInput.value = '';
-            btn.disabled = false;
-            btn.textContent = '내 기록 등록';
-            return;
-          }
-        } else if (getRes.status === 404) {
-          const postRes = await fetch('https://jsonblob.com/api/jsonBlob', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ rankings: game.rankings })
-          });
-          const loc = postRes.headers.get('Location');
-          if (postRes.ok && loc) {
-            localStorage.setItem(STORAGE_KEYS.dynamicBlobUrl, loc);
-            msgEl.textContent = `🎉 [${nick}] 님의 기록이 공용 실시간 랭킹 서버에 자동 등록되었습니다!`;
-            nickInput.value = '';
-            btn.disabled = false;
-            btn.textContent = '내 기록 등록';
-            return;
-          }
-        }
-      } catch (e) {}
-
-      msgEl.textContent = `🎉 [${nick}] 님의 기록이 저장되었습니다! (새로고침해도 영구 유지됩니다)`;
-      nickInput.value = '';
-      btn.disabled = false;
-      btn.textContent = '내 기록 등록';
-    }
-
-    function renderRankings() {
-      const list = document.getElementById('ranking-list');
-      if (!game.rankings.length) {
-        list.innerHTML = `<div class="text-center py-8 text-xs text-slate-400 bg-slate-950/50 rounded-xl border border-white/5">아직 등록된 기록이 없습니다. 경기 또는 홈런 클래시 후 닉네임만 입력해 첫 1위에 올라보세요!</div>`;
-        return;
-      }
-      list.innerHTML = game.rankings.map((r, i) => `
-        <div class="flex items-center justify-between bg-slate-950/80 border ${i === 0 ? 'border-amber-400/50' : 'border-white/10'} rounded-xl px-4 py-3 text-xs sm:text-sm">
-          <div class="flex items-center gap-3">
-            <span class="w-7 h-7 rounded-full ${i === 0 ? 'bg-amber-400 text-slate-950' : i === 1 ? 'bg-slate-300 text-slate-950' : i === 2 ? 'bg-orange-400 text-slate-950' : 'bg-amber-500/20 text-amber-300'} font-black flex items-center justify-center">${i + 1}</span>
-            <div>
-              <div class="font-black text-white">${r.nick} <span class="text-xs font-semibold text-slate-400">(${r.team})</span> <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px]">${r.levelLabel || 'Lv.3 프로'}</span></div>
-              <div class="text-[11px] text-slate-400">등록 시각: ${r.time}</div>
-            </div>
-          </div>
-          <div class="text-right font-extrabold">
-            <div class="text-amber-400">경기 ${r.score} · 홈런 ${r.hr}개</div>
-            <div class="text-[11px] text-rose-300">홈런 클래시 ${r.clash}점</div>
-          </div>
-        </div>`).join('');
-    }
-
-    // ================= 6. Three.js 3D 스타디움 엔진 =================
-    let scene, renderer, batterCamera, activeCamera;
-    let ballMesh, strikeZoneBox, batterGroup, batPivot, pitcherGroup;
-    let fielders = [], runnerMeshes = [];
-    let battedBallAnim = null;
-    let swingAnimProgress = -1;
-    const clock = new THREE.Clock();
-
-    function createPlayerModel(roleLabel) {
-      const group = new THREE.Group();
-      const jerseyMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.55 });
-      const pantsMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.65 });
-      const capMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.5 });
-      const skinMat = new THREE.MeshStandardMaterial({ color: 0xfed7aa, roughness: 0.7 });
-
-      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.38, 1.05, 16), jerseyMat);
-      torso.position.y = 1.25;
-      group.add(torso);
-
-      const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.32, 0.75, 16), pantsMat);
-      legs.position.y = 0.42;
-      group.add(legs);
-
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.33, 16, 16), skinMat);
-      head.position.y = 2.05;
-      group.add(head);
-
-      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), capMat);
-      cap.position.y = 2.1;
-      group.add(cap);
-
-      const marioParts = new THREE.Group();
-      const bibMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8 });
-      const bibFront = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.65, 0.12), bibMat);
-      bibFront.position.set(0, 1.15, 0.36);
-      const bibBack = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.65, 0.12), bibMat);
-      bibBack.position.set(0, 1.15, -0.36);
-      marioParts.add(bibFront, bibBack);
-      marioParts.visible = false;
-      group.add(marioParts);
-
-      const sonicParts = new THREE.Group();
-      const spikeMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8 });
-      [-0.22, 0, 0.22].forEach((offsetY, i) => {
-        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.75, 10), spikeMat);
-        cone.position.set(0, 2.0 + offsetY, 0.32);
-        cone.rotation.x = Math.PI * 0.42 + i * 0.1;
-        sonicParts.add(cone);
-      });
-      sonicParts.visible = false;
-      group.add(sonicParts);
-
-      const canvas = document.createElement('canvas');
-      canvas.width = 128; canvas.height = 48;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
-      ctx.roundRect(14, 6, 100, 34, 10);
-      ctx.fill();
-      ctx.fillStyle = '#f8fafc';
-      ctx.font = 'bold 22px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(roleLabel, 64, 30);
-      const tex = new THREE.CanvasTexture(canvas);
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
-      sprite.position.y = 2.85;
-      sprite.scale.set(1.8, 0.68, 1);
-      group.add(sprite);
-
-      group.userData = { jerseyMat, pantsMat, capMat, marioParts, sonicParts };
-      return group;
-    }
-
-    function applyTeamUniform(playerObj, teamId) {
-      const team = KBO_TEAMS.find(t => t.id === teamId) || KBO_TEAMS[0];
-      const { jerseyMat, pantsMat, capMat, marioParts, sonicParts } = playerObj.userData;
-      jerseyMat.color.setHex(team.primary);
-      capMat.color.setHex(team.cap);
-      pantsMat.color.setHex(team.id === 'MARIO' ? 0x1d4ed8 : team.id === 'SONIC' ? 0x2563eb : 0xf8fafc);
-      marioParts.visible = team.id === 'MARIO';
-      sonicParts.visible = team.id === 'SONIC';
-    }
-
-    function syncTeamColorsOnField() {
-      if (!batterGroup) return;
-      const offenseTeamId = game.isTop ? game.awayTeamId : game.homeTeamId;
-      const defenseTeamId = game.isTop ? game.homeTeamId : game.awayTeamId;
-      applyTeamUniform(batterGroup, offenseTeamId);
-      runnerMeshes.forEach(r => applyTeamUniform(r, offenseTeamId));
-      applyTeamUniform(pitcherGroup, defenseTeamId);
-      fielders.forEach(f => applyTeamUniform(f, defenseTeamId));
-    }
-
-    function makeSectorShape(innerR, outerR, halfAngle = Math.PI / 4, segs = 48) {
-      const shape = new THREE.Shape();
-      if (innerR <= 0) {
-        shape.moveTo(0, 0);
-      } else {
-        shape.moveTo(-innerR * Math.sin(halfAngle), innerR * Math.cos(halfAngle));
-      }
-      for (let i = 0; i <= segs; i++) {
-        const a = -halfAngle + (2 * halfAngle * i) / segs;
-        shape.lineTo(outerR * Math.sin(a), outerR * Math.cos(a));
-      }
-      if (innerR > 0) {
-        for (let i = segs; i >= 0; i--) {
-          const a = -halfAngle + (2 * halfAngle * i) / segs;
-          shape.lineTo(innerR * Math.sin(a), innerR * Math.cos(a));
-        }
-      }
-      shape.closePath();
-      return shape;
-    }
-
-    function initThree() {
-      const wrapper = document.getElementById('stadium-wrapper');
-      const canvas = document.getElementById('three-canvas');
-      scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x09111f);
-      scene.fog = new THREE.FogExp2(0x09111f, 0.0042);
-
-      const aspect = (wrapper.clientWidth || 800) / (wrapper.clientHeight || 420);
-      batterCamera = new THREE.PerspectiveCamera(39, aspect, 0.1, 320);
-      batterCamera.position.set(0, 39, 32);
-      batterCamera.lookAt(0, 0, -25);
-      activeCamera = batterCamera;
-
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-      renderer.setSize(wrapper.clientWidth || 800, wrapper.clientHeight || 420);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-
-      scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-      const dirLight = new THREE.DirectionalLight(0xfffbeb, 0.92);
-      dirLight.position.set(25, 55, 30);
-      scene.add(dirLight);
-
-      const outerGround = new THREE.Mesh(
-        new THREE.PlaneGeometry(260, 260),
-        new THREE.MeshStandardMaterial({ color: 0x0b1628, roughness: 0.95 })
-      );
-      outerGround.rotation.x = -Math.PI / 2;
-      outerGround.position.y = -0.05;
-      scene.add(outerGround);
-
-      const foulTerritory = new THREE.Mesh(
-        new THREE.ShapeGeometry(makeSectorShape(0, 64.5, Math.PI / 3.1, 56)),
-        new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.9 })
-      );
-      foulTerritory.rotation.x = -Math.PI / 2;
-      foulTerritory.position.y = 0.005;
-      scene.add(foulTerritory);
-
-      const warningGeo = new THREE.ShapeGeometry(makeSectorShape(0, 63, Math.PI / 4, 56));
-      const warningMesh = new THREE.Mesh(warningGeo, new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.9 }));
-      warningMesh.rotation.x = -Math.PI / 2;
-      warningMesh.position.y = 0.015;
-      scene.add(warningMesh);
-
-      const grassGeo = new THREE.ShapeGeometry(makeSectorShape(0, 59, Math.PI / 4, 56));
-      const grassMesh = new THREE.Mesh(grassGeo, new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.85 }));
-      grassMesh.rotation.x = -Math.PI / 2;
-      grassMesh.position.y = 0.025;
-      scene.add(grassMesh);
-
-      const infieldDirtGeo = new THREE.ShapeGeometry(makeSectorShape(0, 34.5, Math.PI / 4, 48));
-      const infieldDirt = new THREE.Mesh(infieldDirtGeo, new THREE.MeshStandardMaterial({ color: 0xea801c, roughness: 0.9 }));
-      infieldDirt.rotation.x = -Math.PI / 2;
-      infieldDirt.position.y = 0.035;
-      scene.add(infieldDirt);
-
-      const diamondShape = new THREE.Shape();
-      diamondShape.moveTo(0, 3.2);
-      diamondShape.lineTo(13.2, 16);
-      diamondShape.lineTo(0, 28.8);
-      diamondShape.lineTo(-13.2, 16);
-      diamondShape.closePath();
-      const innerDiamond = new THREE.Mesh(new THREE.ShapeGeometry(diamondShape), new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.85 }));
-      innerDiamond.rotation.x = -Math.PI / 2;
-      innerDiamond.position.y = 0.045;
-      scene.add(innerDiamond);
-
-      const homeCircle = new THREE.Mesh(new THREE.CircleGeometry(3.8, 32), new THREE.MeshStandardMaterial({ color: 0xea801c }));
-      homeCircle.rotation.x = -Math.PI / 2;
-      homeCircle.position.set(0, 0.04, 0.5);
-      scene.add(homeCircle);
-
-      const mound = new THREE.Mesh(new THREE.CircleGeometry(3.1, 32), new THREE.MeshStandardMaterial({ color: 0xea801c }));
-      mound.rotation.x = -Math.PI / 2;
-      mound.position.set(0, 0.055, -15.5);
-      scene.add(mound);
-
-      const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      [-1, 1].forEach(dir => {
-        const foulLine = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 63), lineMat);
-        foulLine.rotation.x = -Math.PI / 2;
-        foulLine.rotation.z = -dir * (Math.PI / 4);
-        foulLine.position.set(dir * 22.27, 0.065, -22.27);
-        scene.add(foulLine);
-
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 11.5, 12), new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0x854d0e }));
-        pole.position.set(dir * 44.55, 5.75, -44.55);
-        scene.add(pole);
-      });
-
-      const fencePts = [];
-      for (let i = 0; i <= 48; i++) {
-        const a = -Math.PI / 4 + (Math.PI / 2 * i) / 48;
-        fencePts.push(new THREE.Vector3(63 * Math.sin(a), 0, -63 * Math.cos(a)));
-      }
-      const fenceCurve = new THREE.CatmullRomCurve3(fencePts);
-      const fenceWall = new THREE.Mesh(
-        new THREE.TubeGeometry(fenceCurve, 48, 0.45, 8, false),
-        new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.6 })
-      );
-      fenceWall.scale.set(1, 5.2, 1);
-      fenceWall.position.y = 1.6;
-      scene.add(fenceWall);
-
-      const fenceTop = new THREE.Mesh(
-        new THREE.TubeGeometry(fenceCurve, 48, 0.22, 8, false),
-        new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0x713f12 })
-      );
-      fenceTop.position.y = 3.9;
-      scene.add(fenceTop);
-
-      const standGeo = new THREE.ExtrudeGeometry(makeSectorShape(65, 77, Math.PI / 3.2, 48), { depth: 4.5, bevelEnabled: false });
-      const standMesh = new THREE.Mesh(standGeo, new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.85 }));
-      standMesh.rotation.x = -Math.PI / 2;
-      standMesh.position.y = 0.01;
-      scene.add(standMesh);
-
-      const baseMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-      [[16, -16], [0, -32], [-16, -16], [0, 0]].forEach(([bx, bz]) => {
-        const b = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.14, 1.15), baseMat);
-        b.rotation.y = Math.PI / 4;
-        b.position.set(bx, 0.08, bz);
-        scene.add(b);
-      });
-
-      strikeZoneBox = new THREE.Mesh(
-        new THREE.BoxGeometry(1.7, 1.5, 0.12),
-        new THREE.MeshBasicMaterial({ color: 0xfacc15, wireframe: true })
-      );
-      strikeZoneBox.position.set(0, 1.45, 0.4);
-      scene.add(strikeZoneBox);
-
-      ballMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.26, 16, 16),
-        new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x334155 })
-      );
-      ballMesh.position.set(0, 1.65, -15.2);
-      scene.add(ballMesh);
-
-      batterGroup = createPlayerModel('BAT');
-      batterGroup.position.set(-1.35, 0, 0.4);
-      scene.add(batterGroup);
-
-      batPivot = new THREE.Group();
-      batPivot.position.set(0.35, 1.35, 0.1);
-      const batMesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.08, 0.12, 1.65, 12),
-        new THREE.MeshStandardMaterial({ color: 0xf59e0b })
-      );
-      batMesh.position.set(0.65, 0.15, 0);
-      batMesh.rotation.z = -Math.PI * 0.35;
-      batPivot.add(batMesh);
-      batterGroup.add(batPivot);
-
-      pitcherGroup = createPlayerModel('P');
-      pitcherGroup.position.set(0, 0, -15.5);
-      scene.add(pitcherGroup);
-
-      const fielderCoords = [
-        ['C', 0, 2.3],
-        ['1B', 16.5, -16.5],
-        ['2B', 8.5, -27],
-        ['SS', -8.5, -27],
-        ['3B', -16.5, -16.5],
-        ['LF', -28, -42],
-        ['CF', 0, -49],
-        ['RF', 28, -42]
-      ];
-      fielders = fielderCoords.map(([label, fx, fz]) => {
-        const f = createPlayerModel(label);
-        f.position.set(fx, 0, fz);
-        scene.add(f);
-        return f;
-      });
-
-      runnerMeshes = [
-        createPlayerModel('R1'),
-        createPlayerModel('R2'),
-        createPlayerModel('R3')
-      ];
-      const baseCoords = [[17.4, -15.5], [1.4, -32], [-17.4, -15.5]];
-      runnerMeshes.forEach((r, idx) => {
-        r.position.set(baseCoords[idx][0], 0, baseCoords[idx][1]);
-        r.visible = false;
-        scene.add(r);
-      });
-
-      window.addEventListener('resize', handleResize);
-      animateThree();
-    }
-
-    function handleResize() {
-      if (!renderer || !batterCamera) return;
-      const wrapper = document.getElementById('stadium-wrapper');
-      const w = wrapper.clientWidth || 800;
-      const h = wrapper.clientHeight || 420;
-      batterCamera.aspect = w / h;
-      batterCamera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    }
-
-    function animateThree() {
-      requestAnimationFrame(animateThree);
-      if (!renderer || !scene || !activeCamera) return;
-      const dt = Math.min(clock.getDelta(), 0.05);
-      const cfg = getLevelCfg();
-
-      if (!game.paused) {
-        if (swingAnimProgress >= 0) {
-          swingAnimProgress += dt * 7.5;
-          batPivot.rotation.y = Math.sin(Math.min(swingAnimProgress, 1) * Math.PI) * 2.5;
-          if (swingAnimProgress >= 1) {
-            swingAnimProgress = -1;
-            batPivot.rotation.y = 0;
-          }
-        }
-
-        if (game.pitchActive) {
-          game.pitchProgress += dt / game.pitchDuration;
-          const t = game.pitchProgress;
-
-          if (t >= cfg.zoneMin && t <= cfg.zoneMax && game.pitchType !== 'ball') {
-            strikeZoneBox.material.color.setHex(0x22c55e);
-          } else if (t >= cfg.zoneMin && t <= cfg.zoneMax && game.pitchType === 'ball') {
-            strikeZoneBox.material.color.setHex(0x38bdf8);
-          } else {
-            strikeZoneBox.material.color.setHex(0xfacc15);
-          }
-
-          const startZ = -15.2, endZ = 0.5;
-          const curZ = startZ + (endZ - startZ) * t;
-          const curveX = game.pitchType === 'breaking'
-            ? Math.sin(t * Math.PI) * (1.1 * cfg.curveScale)
-            : (game.pitchType === 'ball' ? (1.65 * cfg.curveScale) * t : 0);
-          const curY = 1.65 - 0.25 * t + Math.sin(t * Math.PI) * 0.22 - (game.pitchType === 'breaking' ? t * t * (0.45 * cfg.curveScale) : 0);
-          ballMesh.position.set(curveX, Math.max(0.25, curY), curZ);
-
-          if (isUserBatting() && game.autoOffense && !game.autoOffenseSwingScheduled && t >= 0.875 && !game.pitchResolved) {
-            game.autoOffenseSwingScheduled = true;
-            if (game.pitchType !== 'ball' || Math.random() < 0.16) {
-              executeSwing();
-            }
-          }
-
-          if (!isUserBatting() && !game.cpuSwingScheduled && t >= 0.86 && !game.pitchResolved) {
-            game.cpuSwingScheduled = true;
-            handleCpuBatterReaction();
-          }
-
-          if (t >= 1.22 && !game.pitchResolved) {
-            game.pitchResolved = true;
-            game.pitchActive = false;
-            strikeZoneBox.material.color.setHex(0xfacc15);
-            if (game.pitchType === 'ball') {
-              registerBall();
-            } else {
-              registerStrike('👀 스트라이크! 구석에 꽂히는 완벽한 제구!');
-            }
-          }
-        }
-
-        if (battedBallAnim) {
-          battedBallAnim.t += dt * 1.45;
-          const bt = battedBallAnim.t;
-          if (bt >= 1) {
-            battedBallAnim = null;
-            ballMesh.position.set(0, 1.65, -15.2);
-          } else {
-            const x = battedBallAnim.tx * bt;
-            const z = 0.4 + (battedBallAnim.tz - 0.4) * bt;
-            const y = 1.3 + Math.sin(bt * Math.PI) * battedBallAnim.peakY;
-            ballMesh.position.set(x, y, z);
-          }
-        }
-      }
-
-      renderer.render(scene, activeCamera);
-    }
-
-    function launchBattedBallVisual(basesHit) {
-      const spreadX = (Math.random() - 0.5) * (basesHit === 4 ? 46 : 36);
-      const targetZ = basesHit === 4 ? -72 : basesHit === 3 ? -54 : basesHit === 2 ? -45 : -26;
-      const peakY = basesHit === 4 ? 19 : basesHit === 1 ? 3.5 : 11;
-      battedBallAnim = { t: 0, tx: spreadX, tz: targetZ, peakY };
-    }
-
-    // ================= 7. 투구 & 타격 + 직접/자동 수비 로직 =================
-    function isUserBatting() {
-      if (game.mode === 'HR') return true;
-      if (game.mode === '2P') return true;
-      return game.isTop;
-    }
-
-    function scheduleNextPitch(delay = 1450) {
-      clearTimeout(game.autoPitchTimer);
-      if (game.paused || !game.unlocked) return;
-      if (game.mode === 'HR' && game.hrClash.finished) return;
-      if (!isUserBatting()) {
-        if (game.autoDefense) scheduleAutoDefensePitch(delay);
-        return;
-      }
-      game.autoPitchTimer = setTimeout(() => {
-        if (!game.pitchActive && !game.paused && isUserBatting()) startAutoPitch();
-      }, delay);
-    }
-
-    function triggerImmediatePitch() {
-      clearTimeout(game.autoPitchTimer);
-      clearTimeout(game.autoDefenseTimer);
-      if (game.pitchActive || game.paused) return;
-      const cfg = getLevelCfg();
-      if (isUserBatting()) {
-        startAutoPitch();
-      } else {
-        launchPitch('strike', `${cfg.fastSpeed}km 강속 직구`, cfg.fastSpeed, cfg.fastDur);
       }
     }
 
@@ -2350,134 +2092,128 @@
         showBanner('도루 불가', '현재 베이스에 주자가 없습니다!');
         return;
       }
-      if (game.bases[2] && Math.random() < 0.08) {
-        game.bases[2] = false;
-        addScore(1);
-        showBanner('⚡ 홈스틸 대성공!!', '허를 찌르는 단독 홈스틸 득점!');
-        broadcastCommentary('세이프! 기적 같은 단독 홈스틸이 성공합니다!', true);
-      } else if (game.bases[1] && !game.bases[2] && Math.random() < 0.22) {
-        game.bases[1] = false;
-        game.bases[2] = true;
-        showBanner('🏃 3루 도루 성공!', '한 베이스 더 진루했습니다!');
-      } else if (game.bases[0] && !game.bases[1] && Math.random() < 0.34) {
-        game.bases[0] = false;
-        game.bases[1] = true;
-        showBanner('🏃 2루 도루 성공!', '포수 송구보다 빨랐습니다!');
-      } else {
-        if (game.bases[2]) game.bases[2] = false;
-        else if (game.bases[1]) game.bases[1] = false;
-        else game.bases[0] = false;
-        registerOut('🧤 도루 실패 아웃!', '포수의 레이저 송구에 태그 아웃!');
+      if (game.pitchActive) {
+        showBanner('투구 진행 중', '투구 전이나 대기 중에 도루 사인을 내주세요!');
         return;
       }
-      updateScoreboardUI();
+      let targetBase = -1;
+      let successProb = 0.34;
+      let baseLabel = '2루';
+      if (game.bases[2]) { targetBase = 2; successProb = 0.08; baseLabel = '홈스틸'; }
+      else if (game.bases[1]) { targetBase = 1; successProb = 0.22; baseLabel = '3루'; }
+      else if (game.bases[0]) { targetBase = 0; successProb = 0.34; baseLabel = '2루'; }
+
+      if (Math.random() < successProb) {
+        game.bases[targetBase] = false;
+        if (targetBase === 2) {
+          addRuns(1);
+          showBanner('⚡ 기적의 홈스틸 성공!', '완벽한 타이밍으로 홈을 파고들었습니다! (+1점)');
+          broadcastCommentary('세상에! 홈스틸이 성공합니다! 벤치가 열광합니다!', true);
+        } else {
+          game.bases[targetBase + 1] = true;
+          showBanner(`🏃 ${baseLabel} 도루 세이프!`, '포수의 송구보다 한 발 빨랐습니다!');
+          broadcastCommentary(`${baseLabel} 도루 성공! 득점권 찬스를 만듭니다!`, true);
+        }
+        playTone(660, 0.14, 'triangle', 0.16);
+        updateScoreboardUI();
+      } else {
+        game.bases[targetBase] = false;
+        registerOut(`🧤 ${baseLabel} 도루 실패 아웃!`, '포수의 강견 레이저 송구에 태그 아웃되었습니다!');
+      }
     }
 
-    function addHrClashPoints(basePts, title) {
-      const cfg = getLevelCfg();
-      const gained = Math.round(basePts * cfg.clashMult);
+    function addRuns(runs) {
+      if (runs <= 0) return;
+      if (game.isTop) {
+        game.awayScore += runs;
+        if (game.mode === '1P') earnPoints(runs * 40, `${runs}득점 보너스`);
+      } else {
+        game.homeScore += runs;
+        if (game.mode === '2P') earnPoints(runs * 20, `${runs}득점`);
+      }
+    }
+
+    function advanceRunners(basesHit) {
+      let runs = 0;
+      if (basesHit === 4) {
+        runs = 1 + (game.bases[0] ? 1 : 0) + (game.bases[1] ? 1 : 0) + (game.bases[2] ? 1 : 0);
+        game.bases = [false, false, false];
+      } else {
+        for (let step = 0; step < basesHit; step++) {
+          if (game.bases[2]) { runs++; game.bases[2] = false; }
+          if (game.bases[1]) { game.bases[2] = true; game.bases[1] = false; }
+          if (game.bases[0]) { game.bases[1] = true; game.bases[0] = false; }
+        }
+        game.bases[basesHit - 1] = true;
+      }
+      addRuns(runs);
+      return runs;
+    }
+
+    function addHrClashPoints(pts, title, sub = '') {
+      const mult = getLevelCfg().clashMult;
+      const gained = Math.max(1, Math.round(pts * mult));
       game.hrClash.points += gained;
-      game.hrClash.ballsLeft--;
-      earnPoints(gained * 2, '홈런 클래시 보상');
-      showBanner(`${title} (+${gained}점 / +${gained * 2}PT)`, `[${cfg.shortLabel} x${cfg.clashMult.toFixed(1)}] 현재 점수: ${game.hrClash.points}점`);
-      broadcastCommentary(`${title} ${gained}점 획득! 포인트 ${gained * 2}PT 적립!`, true);
+      game.hrClash.ballsLeft = Math.max(0, game.hrClash.ballsLeft - 1);
+      earnPoints(gained * 2, '홈런 클래시');
+      showBanner(`${title} (+${gained}점)`, sub || `남은 기회 ${game.hrClash.ballsLeft}구 · 누적 ${game.hrClash.points}점`);
       updateScoreboardUI();
       if (game.hrClash.ballsLeft <= 0) {
         game.hrClash.finished = true;
-        showBanner('🏆 홈런 클래시 종료!', `[${cfg.shortLabel}] 최종 기록 ${game.hrClash.points}점! 랭킹 탭에서 등록하세요!`);
+        showBanner('🏆 홈런 클래시 종료!', `최종 기록 ${game.hrClash.points}점! 획득한 포인트로 선수 강화 & 구단 영입을 해보세요!`);
+        broadcastCommentary(`홈런 클래시 종료! 최종 ${game.hrClash.points}점을 달성했습니다!`, true);
       } else {
         scheduleNextPitch(1450);
       }
     }
 
     function resolveHit(basesHit, title, sub) {
-      playBatCrack(true);
       launchBattedBallVisual(basesHit);
+      if (game.mode === 'HR') {
+        if (basesHit === 4) {
+          game.homers++;
+          addHrClashPoints(10, title, sub);
+        } else if (basesHit >= 2) {
+          addHrClashPoints(4, title, '장타 보너스 점수 획득!');
+        } else {
+          addHrClashPoints(2, title, '안타 보너스 점수 획득!');
+        }
+        return;
+      }
+
       if (isUserBatting()) {
         game.atBats++;
         game.hits++;
         if (basesHit === 4) {
           game.homers++;
-          earnPoints(60, '홈런 보너스');
+          earnPoints(60, '홈런 작렬!');
         } else if (basesHit >= 2) {
-          earnPoints(30, '장타 보너스');
+          earnPoints(30, `${basesHit}루타!`);
         } else {
-          earnPoints(15, '안타 보너스');
+          earnPoints(15, '안타!');
         }
       }
 
-      if (game.mode === 'HR') {
-        const basePts = basesHit === 4 ? 10 : basesHit === 3 ? 5 : basesHit === 2 ? 3 : 2;
-        addHrClashPoints(basePts, title);
-        return;
-      }
-
-      let runs = 0;
-      const nextBases = [false, false, false];
-      for (let i = 2; i >= 0; i--) {
-        if (game.bases[i]) {
-          const dest = i + basesHit;
-          if (dest >= 3) runs++;
-          else nextBases[dest] = true;
-        }
-      }
-      if (basesHit >= 4) runs++;
-      else nextBases[basesHit - 1] = true;
-
-      game.bases = nextBases;
+      const runs = advanceRunners(basesHit);
       game.balls = 0;
       game.strikes = 0;
-      if (runs > 0) {
-        addScore(runs);
-        if (isUserBatting()) earnPoints(runs * 40, `${runs}득점 보상`);
-      }
-
-      showBanner(title, runs > 0 ? `${sub} (${runs}득점!)` : sub);
-      broadcastCommentary(`${title} ${runs > 0 ? runs + '점을 뽑아냅니다!' : sub}`, true);
+      const runMsg = runs > 0 ? ` (${runs}득점!)` : '';
+      showBanner(`${title}${runMsg}`, sub);
+      broadcastCommentary(`${title}${runMsg} ${sub}`, true);
       updateScoreboardUI();
-      if (isUserBatting()) scheduleNextPitch(1650);
-      else if (game.autoDefense) scheduleAutoDefensePitch(1650);
+
+      if (isUserBatting()) scheduleNextPitch(1600);
+      else if (game.autoDefense) scheduleAutoDefensePitch(1600);
     }
 
-    function registerBall() {
+    function registerStrike(reason = '스트라이크!') {
       if (game.mode === 'HR') {
-        game.hrClash.ballsLeft--;
-        updateScoreboardUI();
-        scheduleNextPitch(1300);
-        return;
-      }
-      game.balls++;
-      if (game.balls >= 4) {
-        game.balls = 0;
-        game.strikes = 0;
-        if (isUserBatting()) game.atBats++;
-        if (game.bases[0] && game.bases[1] && game.bases[2]) {
-          addScore(1);
-          showBanner('🚶 밀어내기 볼넷 득점!', '볼 4개로 밀어내기 1점을 허용합니다!');
-        } else {
-          if (game.bases[0] && game.bases[1]) game.bases[2] = true;
-          if (game.bases[0]) game.bases[1] = true;
-          game.bases[0] = true;
-          showBanner('🚶 볼넷 출루!', '볼 4개로 1루 진루!');
-        }
-        broadcastCommentary('볼넷! 타자가 볼 4개를 골라 1루로 걸어 나갑니다.', true);
-      } else {
-        showBanner(`🟢 볼 ${game.balls}!`, `유인구 볼 판정 (${game.balls}볼 ${game.strikes}스트라이크)`);
-        broadcastCommentary(`볼! 바깥쪽으로 빠지며 ${game.balls}볼 ${game.strikes}스트라이크가 됩니다.`, true);
-      }
-      updateScoreboardUI();
-      if (isUserBatting()) scheduleNextPitch(1300);
-      else if (game.autoDefense) scheduleAutoDefensePitch(1350);
-    }
-
-    function registerStrike(reason) {
-      if (game.mode === 'HR') {
-        game.hrClash.ballsLeft--;
-        showBanner('💨 헛스윙 / 스트라이크!', `남은 공 ${game.hrClash.ballsLeft}구`);
+        game.hrClash.ballsLeft = Math.max(0, game.hrClash.ballsLeft - 1);
+        showBanner(reason, `남은 공 ${game.hrClash.ballsLeft}구`);
         updateScoreboardUI();
         if (game.hrClash.ballsLeft <= 0) {
           game.hrClash.finished = true;
-          showBanner('🏆 홈런 클래시 종료!', `최종 기록 ${game.hrClash.points}점!`);
+          showBanner('🏆 홈런 클래시 종료!', `최종 기록 ${game.hrClash.points}점! 새 경기로 다시 도전해보세요!`);
         } else {
           scheduleNextPitch(1350);
         }
@@ -2487,15 +2223,36 @@
       game.strikes++;
       if (game.strikes >= 3) {
         if (isUserBatting()) game.atBats++;
-        else earnPoints(20, '삼진 수비 보너스');
-        registerOut('⚡ 삼진 아웃!!', reason);
+        else earnPoints(20, '삼진 아웃!');
+        registerOut('🔥 삼진 아웃! (Strike Out)', reason);
       } else {
-        showBanner(`스트라이크 ${game.strikes}!`, `${reason} (${game.balls}볼 ${game.strikes}스트라이크)`);
-        broadcastCommentary(`${reason} (${game.balls}볼 ${game.strikes}스트라이크)`, true);
+        showBanner(`스트라이크 ${game.strikes}!`, reason);
+        broadcastCommentary(`${reason} (${game.balls}볼 ${game.strikes}스트라이크)`, false);
         updateScoreboardUI();
         if (isUserBatting()) scheduleNextPitch(1350);
         else if (game.autoDefense) scheduleAutoDefensePitch(1350);
       }
+    }
+
+    function registerBall() {
+      if (game.mode === 'HR') {
+        scheduleNextPitch(1100);
+        return;
+      }
+      game.balls++;
+      if (game.balls >= 4) {
+        const runs = advanceRunners(1);
+        game.balls = 0;
+        game.strikes = 0;
+        showBanner('🚶 볼넷 출루! (Base on Balls)', runs > 0 ? `밀어내기 ${runs}득점!` : '1루로 걸어 나갑니다!');
+        broadcastCommentary('볼넷으로 1루 출루합니다!', true);
+        updateScoreboardUI();
+      } else {
+        showBanner(`볼 ${game.balls}!`, `${game.balls}볼 ${game.strikes}스트라이크`);
+        updateScoreboardUI();
+      }
+      if (isUserBatting()) scheduleNextPitch(1350);
+      else if (game.autoDefense) scheduleAutoDefensePitch(1350);
     }
 
     function registerOut(title, sub) {
@@ -2505,130 +2262,137 @@
       if (game.outs >= 3) {
         game.outs = 0;
         game.bases = [false, false, false];
-        clearTimeout(game.autoPitchTimer);
-        clearTimeout(game.autoDefenseTimer);
         if (game.isTop) {
           game.isTop = false;
-          showBanner('🔄 3아웃 공수교대! 수비 시작', `${game.inning}회말 수비 이닝! ${game.autoDefense ? '🤖 자동 수비가 가동됩니다!' : '직구·변화구·유인구(볼)·결정구로 막아내세요!'}`);
-          broadcastCommentary(`쓰리아웃 공수교대! ${game.inning}회말 수비 이닝입니다!`, true);
-          if (game.autoDefense) scheduleAutoDefensePitch(1700);
         } else {
           game.isTop = true;
           game.inning++;
-          showBanner('🔄 3아웃 공수교대! 공격 시작', `${game.inning}회초 공격 이닝이 시작됩니다!`);
-          broadcastCommentary(`쓰리아웃 공수교대! ${game.inning}회초 공격이 시작됩니다!`, true);
-          scheduleNextPitch(1700);
+        }
+
+        if (game.inning > 3) {
+          const resultText = game.awayScore > game.homeScore ? '🎉 1P 승리!' : game.awayScore < game.homeScore ? '😢 상대 팀 승리!' : '🤝 무승부!';
+          showBanner(`🏁 경기 종료! ${resultText}`, `최종 스코어 ${game.awayScore} : ${game.homeScore} (모은 포인트로 강화 & 영입!)`);
+          broadcastCommentary(`3이닝 정규 경기가 종료되었습니다! 최종 스코어 ${game.awayScore} 대 ${game.homeScore}!`, true);
+          game.inning = 1;
+          game.isTop = true;
+          game.awayScore = 0;
+          game.homeScore = 0;
+          game.stamina = 100;
+          game.relieverLeft = 4;
+          game.decisionLeft = 3;
+        } else {
+          showBanner('🔄 3아웃 공수 교대!', `${game.inning}회${game.isTop ? '초 (공격)' : '말 (수비)'}로 넘어갑니다!`);
+          broadcastCommentary(`쓰리아웃! ${game.inning}회${game.isTop ? '초' : '말'} 공수 교대합니다!`, true);
         }
         syncTeamColorsOnField();
       } else {
         showBanner(title, `${sub} (${game.outs}아웃)`);
-        broadcastCommentary(`${title} ${sub}`, true);
-        if (isUserBatting()) scheduleNextPitch(1550);
-        else if (game.autoDefense) scheduleAutoDefensePitch(1550);
+        broadcastCommentary(`${title} ${sub}`, false);
       }
       updateScoreboardUI();
-    }
-
-    function addScore(runs) {
-      if (game.isTop) game.awayScore += runs;
-      else game.homeScore += runs;
-    }
-
-    function useReliever() {
-      if (game.relieverLeft <= 0) {
-        showBanner('불펜 소진!', '이번 경기 투수 교체(4/4)를 모두 사용했습니다.');
-        return;
-      }
-      game.relieverLeft--;
-      game.stamina = 100;
-      showBanner('🔄 불펜 투수 교체!', `체력 100% 회복! (남은 교체 ${game.relieverLeft}/4회)`);
-      broadcastCommentary(`불펜에서 새 투수가 마운드에 오릅니다! 체력이 100% 회복되었습니다.`, true);
-      updateScoreboardUI();
-    }
-
-    function updateActionButtonsMode() {
-      const batting = isUserBatting();
-      const cfg = getLevelCfg();
-      const pTitle = document.getElementById('primary-title');
-      const pSub = document.getElementById('primary-sub');
-      const sTitle = document.getElementById('secondary-title');
-      const sSub = document.getElementById('secondary-sub');
-      const defBallBtn = document.getElementById('btn-defense-ball');
-      const defBallTitle = document.getElementById('def-ball-title');
-      const tTitle = document.getElementById('tertiary-title');
-      const tSub = document.getElementById('tertiary-sub');
-
-      if (batting) {
-        defBallBtn.classList.add('hidden');
-        pTitle.textContent = game.autoOffense ? '🤖 자동공격 실행 중 (수동 스윙 가능)' : '⚾ SWING! (풀스윙)';
-        pSub.textContent = `[${cfg.shortLabel}] 초록불 배트 궤적일 때 타격 [Space]`;
-        sTitle.textContent = '🏏 BUNT (작전 번트)';
-        sSub.textContent = '기습안타 & 희생진루 [B]';
-        tTitle.textContent = '🏃 STEAL (도루 작전)';
-        tSub.textContent = '2루 34% · 3루 22% · 홈 8% [S]';
-      } else {
-        defBallBtn.classList.remove('hidden');
-        pTitle.textContent = `🔥 강속 직구 (${cfg.fastSpeed}km)`;
-        pSub.textContent = game.autoDefense ? '🤖 자동수비 AI 투구 가동 중' : '정면 승부 포심 패스트볼 [Space]';
-        sTitle.textContent = `🌀 고속 변화구 (${cfg.breakSpeed}km)`;
-        sSub.textContent = '슬라이더/포크볼 헛스윙 유도 [B]';
-        defBallTitle.textContent = `🎯 유인구 볼 (${cfg.ballSpeed}km)`;
-        tTitle.textContent = `⚡ 마구 결정구 (${game.decisionLeft}/3)`;
-        tSub.textContent = `${cfg.breakSpeed + 5}km/h 위닝샷 결정구 [S]`;
-      }
+      if (isUserBatting()) scheduleNextPitch(1550);
+      else if (game.autoDefense) scheduleAutoDefensePitch(1550);
     }
 
     function updateScoreboardUI() {
-      const awayObj = KBO_TEAMS.find(t => t.id === game.awayTeamId);
-      const homeObj = KBO_TEAMS.find(t => t.id === game.homeTeamId);
+      const awayObj = KBO_TEAMS.find(t => t.id === game.awayTeamId) || KBO_TEAMS[0];
+      const homeObj = KBO_TEAMS.find(t => t.id === game.homeTeamId) || KBO_TEAMS[1];
       const cfg = getLevelCfg();
-      document.getElementById('hud-away-name').textContent = awayObj.id;
-      document.getElementById('hud-home-name').textContent = homeObj.id;
+
+      document.getElementById('hud-away-name').textContent = awayObj.name.split(' ')[0];
+      document.getElementById('hud-home-name').textContent = homeObj.name.split(' ')[0];
       document.getElementById('hud-away-score').textContent = game.awayScore;
       document.getElementById('hud-home-score').textContent = game.homeScore;
       document.getElementById('hud-level-badge').textContent = cfg.shortLabel;
-      document.getElementById('hud-inning').textContent = game.mode === 'HR'
-        ? (game.autoOffense ? '🔥 홈런 클래시 [🤖자동]' : '🔥 홈런 클래시')
-        : `${game.inning}회${game.isTop ? (game.autoOffense ? '초 (🤖 자동 공격)' : '초 (1P 공격)') : (game.mode === '2P' ? '말 (2P 공격)' : (game.autoDefense ? '말 (🤖 자동 수비)' : '말 (1P 직접 수비)'))}`;
 
-      ['b1', 'b2', 'b3'].forEach((id, idx) => document.getElementById(id).classList.toggle('ball', idx < game.balls));
-      ['s1', 's2'].forEach((id, idx) => document.getElementById(id).classList.toggle('strike', idx < game.strikes));
-      ['o1', 'o2'].forEach((id, idx) => document.getElementById(id).classList.toggle('out', idx < game.outs));
+      const inningEl = document.getElementById('hud-inning');
+      if (game.mode === 'HR') {
+        inningEl.textContent = '🔥 홈런 클래시';
+      } else {
+        inningEl.textContent = `${game.inning}회${game.isTop ? '초' : '말'} (${isUserBatting() ? '공격' : '직접 수비'})`;
+      }
 
-      [0, 1, 2].forEach(idx => {
-        document.getElementById(`base-${idx + 1}`).classList.toggle('active', game.bases[idx]);
-        if (runnerMeshes[idx]) runnerMeshes[idx].visible = game.bases[idx];
+      ['b1', 'b2', 'b3'].forEach((id, i) => document.getElementById(id).classList.toggle('ball', i < game.balls));
+      ['s1', 's2'].forEach((id, i) => document.getElementById(id).classList.toggle('strike', i < game.strikes));
+      ['o1', 'o2'].forEach((id, i) => document.getElementById(id).classList.toggle('out', i < game.outs));
+
+      [0, 1, 2].forEach(i => {
+        document.getElementById(`base-${i + 1}`).classList.toggle('active', game.bases[i]);
+        if (runnerMeshes[i]) runnerMeshes[i].visible = game.bases[i];
       });
 
       const avg = game.atBats > 0 ? (game.hits / game.atBats).toFixed(3).replace(/^0/, '') : '.000';
       document.getElementById('hud-batter-stat').textContent = `타율 ${avg} · 홈런 ${game.homers}`;
       document.getElementById('hud-stamina').textContent = `체력 ${game.stamina}%`;
+      updateAccountPointsUI();
+
+      const hrHud = document.getElementById('hr-clash-hud');
+      hrHud.classList.toggle('hidden', game.mode !== 'HR');
+      if (game.mode === 'HR') {
+        document.getElementById('hr-level-label').textContent = `${cfg.shortLabel} x${cfg.clashMult.toFixed(1)}`;
+        document.getElementById('hr-balls-left').textContent = game.hrClash.ballsLeft;
+        document.getElementById('hr-points').textContent = game.hrClash.points;
+      }
+
+      const defBallBtn = document.getElementById('btn-defense-ball');
+      if (isUserBatting()) {
+        defBallBtn.classList.add('hidden');
+        document.getElementById('primary-title').textContent = '⚾ SWING! (풀스윙)';
+        document.getElementById('primary-sub').textContent = '초록불 배트 궤적일 때 타격 [Space]';
+        document.getElementById('secondary-title').textContent = '🏏 BUNT (작전 번트)';
+        document.getElementById('secondary-sub').textContent = '기습안타 & 희생진루 [B]';
+        document.getElementById('tertiary-title').textContent = '🏃 STEAL (도루 작전)';
+        document.getElementById('tertiary-sub').textContent = '2루 34% · 3루 22% · 홈 8% [S]';
+      } else {
+        defBallBtn.classList.remove('hidden');
+        document.getElementById('primary-title').textContent = `🔥 직구 (${cfg.fastSpeed}km)`;
+        document.getElementById('primary-sub').textContent = '강속 스트라이크 투구 [Space]';
+        document.getElementById('secondary-title').textContent = `🌀 변화구 (${cfg.breakSpeed}km)`;
+        document.getElementById('secondary-sub').textContent = '날카로운 슬라이더/포크 [B]';
+        document.getElementById('tertiary-title').textContent = `⚡ 결정구 (${game.decisionLeft}/3)`;
+        document.getElementById('tertiary-sub').textContent = '필살 마구 삼진 유도 [S]';
+      }
+
       document.getElementById('btn-reliever').textContent = `🔄 불펜 (${game.relieverLeft}/4)`;
-
-      document.getElementById('hr-clash-hud').classList.toggle('hidden', game.mode !== 'HR');
-      document.getElementById('hr-level-label').textContent = `${cfg.shortLabel} x${cfg.clashMult.toFixed(1)}`;
-      document.getElementById('hr-balls-left').textContent = game.hrClash.ballsLeft;
-      document.getElementById('hr-points').textContent = game.hrClash.points;
-
-      updateActionButtonsMode();
     }
 
     function setGameMode(mode) {
       game.mode = mode;
       ['1p', '2p', 'hr'].forEach(m => {
-        const el = document.getElementById(`mode-${m}`);
-        const active = (m.toUpperCase() === mode);
-        el.className = active
+        const btn = document.getElementById(`mode-${m}`);
+        if (!btn) return;
+        const active = m.toUpperCase() === mode;
+        btn.className = active
           ? 'px-2.5 py-1 rounded-lg text-xs font-black bg-amber-500 text-slate-950'
           : 'px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-800 text-slate-300';
       });
       resetMatch();
     }
 
+    function togglePause() {
+      game.paused = !game.paused;
+      document.getElementById('btn-pause').textContent = game.paused ? '▶️ 재개 [P]' : '⏸️ 일시정지 [P]';
+      if (!game.paused && !game.pitchActive) {
+        if (isUserBatting()) scheduleNextPitch(700);
+        else if (game.autoDefense) scheduleAutoDefensePitch(700);
+      }
+    }
+
+    function useReliever() {
+      if (game.relieverLeft <= 0) {
+        showBanner('불펜 소진', '이번 경기 구원 투수 카드를 모두 사용했습니다!');
+        return;
+      }
+      game.relieverLeft--;
+      game.stamina = 100;
+      updateScoreboardUI();
+      showBanner('🔄 구원 투수 등판!', '투수 체력이 100%로 회복되었습니다!');
+      broadcastCommentary('새 구원 투수가 마운드에 오릅니다! 체력 100% 충전!', true);
+    }
+
     function resetMatch() {
       clearTimeout(game.autoPitchTimer);
       clearTimeout(game.autoDefenseTimer);
-      const cfg = getLevelCfg();
       game.inning = 1;
       game.isTop = true;
       game.awayScore = 0;
@@ -2637,63 +2401,361 @@
       game.strikes = 0;
       game.outs = 0;
       game.bases = [false, false, false];
-      game.atBats = 0;
-      game.hits = 0;
-      game.homers = 0;
       game.stamina = 100;
       game.relieverLeft = 4;
       game.decisionLeft = 3;
       game.pitchActive = false;
       game.pitchResolved = false;
       game.hrClash = { ballsLeft: 7, points: 0, finished: false };
+      if (ballMesh) ballMesh.position.set(0, 1.65, -15.2);
       if (renderer) syncTeamColorsOnField();
       updateScoreboardUI();
-      showBanner(`⚾ 새 경기 플레이볼! (${cfg.shortLabel})`, game.mode === 'HR' ? `7구 홈런 클래시 시작! (점수 x${cfg.clashMult.toFixed(1)})` : '공이 홈플레이트 통과 시 스윙하세요!');
-      scheduleNextPitch(1300);
-    }
-
-    function togglePause() {
-      game.paused = !game.paused;
-      document.getElementById('btn-pause').textContent = game.paused ? '▶️ 재개 [P]' : '⏸️ 일시정지 [P]';
-      if (!game.paused && !game.pitchActive) {
-        if (isUserBatting()) scheduleNextPitch(800);
-        else if (game.autoDefense) scheduleAutoDefensePitch(800);
-      }
-    }
-
-    function setCaster(style) {
-      game.caster = style;
-      document.getElementById('caster-busan').className = style === 'busan'
-        ? 'px-2.5 py-1 rounded-lg font-bold bg-amber-500 text-slate-950'
-        : 'px-2.5 py-1 rounded-lg font-bold bg-slate-800 text-slate-300';
-      document.getElementById('caster-jamsil').className = style === 'jamsil'
-        ? 'px-2.5 py-1 rounded-lg font-bold bg-amber-500 text-slate-950'
-        : 'px-2.5 py-1 rounded-lg font-bold bg-slate-800 text-slate-300';
-      broadcastCommentary('해설위원 마이크가 전환되었습니다!', true);
+      showBanner('⚾ 새 경기 시작!', game.mode === 'HR' ? '7구 동안 최대한 많은 홈런을 날려보세요!' : '플레이볼! 투구를 준비합니다.');
+      if (game.unlocked) scheduleNextPitch(1100);
     }
 
     function toggleVoice() {
       game.voiceOn = !game.voiceOn;
-      document.getElementById('btn-voice').textContent = game.voiceOn ? '🎙️ 중계 ON' : '🔇 중계 OFF';
+      document.getElementById('btn-voice').textContent = game.voiceOn ? '🎙️ 중계 ON' : '🎙️ 중계 OFF';
     }
 
     function toggleSfx() {
       game.sfxOn = !game.sfxOn;
-      document.getElementById('btn-sfx').textContent = game.sfxOn ? '🔊 효과음 ON' : '🔇 효과음 OFF';
+      document.getElementById('btn-sfx').textContent = game.sfxOn ? '🔊 효과음 ON' : '🔊 효과음 OFF';
     }
 
     function toggleBgm() {
       game.bgmOn = !game.bgmOn;
-      document.getElementById('btn-bgm').textContent = game.bgmOn ? '🎵 응원가 ON' : '🎵 응원가 OFF';
+      const btn = document.getElementById('btn-bgm');
+      btn.textContent = game.bgmOn ? '🎵 응원가 ON' : '🎵 응원가 OFF';
       clearInterval(bgmInterval);
       if (game.bgmOn) {
         let step = 0;
         bgmInterval = setInterval(() => {
-          const team = KBO_TEAMS.find(t => t.id === game.awayTeamId) || KBO_TEAMS[0];
+          if (!game.bgmOn || game.paused) return;
+          const team = KBO_TEAMS.find(t => t.id === (game.isTop ? game.awayTeamId : game.homeTeamId)) || KBO_TEAMS[0];
           playTone(team.freq[step % team.freq.length], 0.16, 'triangle', 0.06);
           step++;
-        }, 420);
+        }, 320);
       }
+    }
+
+    function setCaster(type) {
+      game.caster = type;
+      document.getElementById('caster-busan').className = type === 'busan'
+        ? 'px-2.5 py-1 rounded-lg font-bold bg-amber-500 text-slate-950'
+        : 'px-2.5 py-1 rounded-lg font-bold bg-slate-800 text-slate-300';
+      document.getElementById('caster-jamsil').className = type === 'jamsil'
+        ? 'px-2.5 py-1 rounded-lg font-bold bg-amber-500 text-slate-950'
+        : 'px-2.5 py-1 rounded-lg font-bold bg-slate-800 text-slate-300';
+      broadcastCommentary(type === 'busan' ? '시원시원하게 담장 넘겨봅시다!' : '볼배합과 타격 타이밍을 정밀 분석해 드립니다.', true);
+    }
+
+    function refreshQrCode() {
+      const box = document.getElementById('qrcode-container');
+      const label = document.getElementById('qr-sync-url-label');
+      if (!box) return;
+      const url = getBoothShareUrl();
+      if (label) label.textContent = url;
+      box.innerHTML = '';
+      if (typeof QRCode !== 'undefined') {
+        new QRCode(box, {
+          text: url,
+          width: 196,
+          height: 196,
+          colorDark: '#0f172a',
+          colorLight: '#ffffff'
+        });
+      }
+    }
+
+    // ================= 6. 리얼 3D Three.js 야구장 & 투타 물리 엔진 =================
+    let scene = null, camera = null, renderer = null;
+    let ballMesh = null, batPivot = null, strikeZoneBox = null;
+    let pitcherGroup = null, batterGroup = null;
+    let runnerMeshes = [];
+    let swingAnimProgress = -1;
+    let battedBallAnim = { active: false, t: 0, start: null, peak: null, end: null };
+    let lastFrameTime = performance.now();
+
+    function isUserBatting() {
+      if (game.mode === 'HR' || game.mode === '2P') return true;
+      return game.isTop;
+    }
+
+    function scheduleNextPitch(delay = 1400) {
+      clearTimeout(game.autoPitchTimer);
+      if (game.paused || !game.unlocked || !isUserBatting()) return;
+      if (game.mode === 'HR' && game.hrClash.finished) return;
+      game.autoPitchTimer = setTimeout(() => {
+        if (!game.paused && !game.pitchActive && isUserBatting()) {
+          startAutoPitch();
+        }
+      }, delay);
+    }
+
+    function triggerImmediatePitch() {
+      if (!game.unlocked || game.paused) return;
+      clearTimeout(game.autoPitchTimer);
+      clearTimeout(game.autoDefenseTimer);
+      if (!game.pitchActive) {
+        if (isUserBatting()) {
+          startAutoPitch();
+        } else {
+          const cfg = getLevelCfg();
+          launchPitch('strike', `${cfg.fastSpeed}km 강속 직구`, cfg.fastSpeed, cfg.fastDur);
+        }
+      }
+    }
+
+    function createPlayerFigure(jerseyHex, capHex) {
+      const group = new THREE.Group();
+      const bodyMat = new THREE.MeshStandardMaterial({ color: jerseyHex, roughness: 0.55 });
+      const pantsMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.65 });
+      const skinMat = new THREE.MeshStandardMaterial({ color: 0xfcd34d, roughness: 0.5 });
+      const capMat = new THREE.MeshStandardMaterial({ color: capHex, roughness: 0.5 });
+
+      const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.22, 0.9, 12), pantsMat);
+      legs.position.y = 0.45;
+      group.add(legs);
+
+      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.26, 0.95, 14), bodyMat);
+      torso.position.y = 1.35;
+      group.add(torso);
+
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 16), skinMat);
+      head.position.y = 2.05;
+      group.add(head);
+
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.27, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), capMat);
+      cap.position.y = 2.08;
+      group.add(cap);
+
+      return group;
+    }
+
+    function initThree() {
+      const wrapper = document.getElementById('stadium-wrapper');
+      const canvas = document.getElementById('three-canvas');
+      if (!wrapper || !canvas || typeof THREE === 'undefined') return;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x091326);
+      scene.fog = new THREE.FogExp2(0x091326, 0.0085);
+
+      camera = new THREE.PerspectiveCamera(46, wrapper.clientWidth / wrapper.clientHeight, 0.1, 300);
+      camera.position.set(0, 3.35, 8.2);
+      camera.lookAt(0, 1.35, -14);
+
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+
+      const hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x0f172a, 1.15);
+      scene.add(hemiLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.05);
+      dirLight.position.set(14, 28, 16);
+      scene.add(dirLight);
+
+      const grass = new THREE.Mesh(
+        new THREE.CircleGeometry(95, 48),
+        new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.85 })
+      );
+      grass.rotation.x = -Math.PI / 2;
+      scene.add(grass);
+
+      const infieldDirt = new THREE.Mesh(
+        new THREE.PlaneGeometry(24, 24),
+        new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.9 })
+      );
+      infieldDirt.rotation.x = -Math.PI / 2;
+      infieldDirt.rotation.z = Math.PI / 4;
+      infieldDirt.position.set(0, 0.02, -13);
+      scene.add(infieldDirt);
+
+      const mound = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.7, 2.2, 0.22, 24),
+        new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9 })
+      );
+      mound.position.set(0, 0.11, -15.5);
+      scene.add(mound);
+
+      const wall = new THREE.Mesh(
+        new THREE.CylinderGeometry(82, 82, 4.2, 48, 1, true, Math.PI * 0.65, Math.PI * 0.7),
+        new THREE.MeshStandardMaterial({ color: 0x1e3a8a, side: THREE.DoubleSide, roughness: 0.6 })
+      );
+      wall.position.set(0, 2.1, -6);
+      scene.add(wall);
+
+      const plate = new THREE.Mesh(
+        new THREE.BoxGeometry(0.75, 0.05, 0.75),
+        new THREE.MeshStandardMaterial({ color: 0xffffff })
+      );
+      plate.position.set(0, 0.03, 0);
+      scene.add(plate);
+
+      strikeZoneBox = new THREE.Mesh(
+        new THREE.BoxGeometry(0.95, 1.05, 0.12),
+        new THREE.MeshBasicMaterial({ color: 0xfacc15, wireframe: true, transparent: true, opacity: 0.55 })
+      );
+      strikeZoneBox.position.set(0, 1.15, 0);
+      scene.add(strikeZoneBox);
+
+      ballMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.14, 16, 16),
+        new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x334155, roughness: 0.35 })
+      );
+      ballMesh.position.set(0, 1.65, -15.2);
+      scene.add(ballMesh);
+
+      batPivot = new THREE.Group();
+      batPivot.position.set(-0.78, 1.15, 0.25);
+      const batMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.055, 0.035, 1.25, 12),
+        new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.4 })
+      );
+      batMesh.position.set(0.55, 0.1, 0);
+      batMesh.rotation.z = -Math.PI / 2.6;
+      batPivot.add(batMesh);
+      scene.add(batPivot);
+
+      const baseCoords = [
+        [11.5, 0.6, -13],
+        [0, 0.6, -24.5],
+        [-11.5, 0.6, -13]
+      ];
+      runnerMeshes = baseCoords.map(([x, y, z]) => {
+        const m = new THREE.Mesh(
+          new THREE.ConeGeometry(0.45, 1.2, 12),
+          new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xca8a04 })
+        );
+        m.position.set(x, y, z);
+        m.visible = false;
+        scene.add(m);
+        return m;
+      });
+
+      syncTeamColorsOnField();
+      window.addEventListener('resize', handleResize);
+      lastFrameTime = performance.now();
+      requestAnimationFrame(animateThree);
+    }
+
+    function handleResize() {
+      const wrapper = document.getElementById('stadium-wrapper');
+      if (!wrapper || !renderer || !camera) return;
+      const w = wrapper.clientWidth || 640;
+      const h = wrapper.clientHeight || 380;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+
+    function syncTeamColorsOnField() {
+      if (!scene) return;
+      const awayObj = KBO_TEAMS.find(t => t.id === game.awayTeamId) || KBO_TEAMS[0];
+      const homeObj = KBO_TEAMS.find(t => t.id === game.homeTeamId) || KBO_TEAMS[1];
+      const battingTeam = game.isTop ? awayObj : homeObj;
+      const fieldingTeam = game.isTop ? homeObj : awayObj;
+
+      if (pitcherGroup) scene.remove(pitcherGroup);
+      if (batterGroup) scene.remove(batterGroup);
+
+      pitcherGroup = createPlayerFigure(fieldingTeam.primary, fieldingTeam.cap);
+      pitcherGroup.position.set(0, 0.2, -15.6);
+      scene.add(pitcherGroup);
+
+      batterGroup = createPlayerFigure(battingTeam.primary, battingTeam.cap);
+      batterGroup.position.set(-1.05, 0, 0.2);
+      batterGroup.rotation.y = Math.PI * 0.45;
+      scene.add(batterGroup);
+    }
+
+    function launchBattedBallVisual(basesHit) {
+      if (!ballMesh) return;
+      const spreadX = (Math.random() - 0.5) * (basesHit === 4 ? 26 : 18);
+      const distZ = basesHit === 4 ? -96 : basesHit === 3 ? -68 : basesHit === 2 ? -54 : -30;
+      const peakY = basesHit === 4 ? 22 : basesHit >= 2 ? 12 : 4.2;
+      battedBallAnim = {
+        active: true,
+        t: 0,
+        start: new THREE.Vector3(0, 1.15, 0),
+        peak: new THREE.Vector3(spreadX * 0.5, peakY, distZ * 0.5),
+        end: new THREE.Vector3(spreadX, 0.3, distZ)
+      };
+    }
+
+    function animateThree(now) {
+      requestAnimationFrame(animateThree);
+      const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+      lastFrameTime = now;
+
+      if (!renderer || !scene || !camera) return;
+
+      if (!game.paused) {
+        if (swingAnimProgress >= 0 && batPivot) {
+          swingAnimProgress += dt * 5.2;
+          if (swingAnimProgress <= 1) {
+            batPivot.rotation.y = Math.sin(swingAnimProgress * Math.PI) * 2.3;
+          } else {
+            batPivot.rotation.y = 0;
+            swingAnimProgress = -1;
+          }
+        }
+
+        if (game.pitchActive && !game.pitchResolved && ballMesh) {
+          game.pitchProgress += dt / Math.max(0.4, game.pitchDuration);
+          const p = game.pitchProgress;
+          const cfg = getLevelCfg();
+          const z = -15.2 + p * 16.4;
+          const curveX = game.pitchType === 'breaking'
+            ? Math.sin(p * Math.PI) * 0.45 * cfg.curveScale
+            : game.pitchType === 'ball'
+              ? Math.pow(p, 1.5) * 0.95
+              : 0;
+          const arcY = 1.65 - p * 0.48 + Math.sin(p * Math.PI) * 0.22;
+          ballMesh.position.set(curveX, arcY, z);
+
+          if (strikeZoneBox) {
+            const inZone = p >= cfg.zoneMin && p <= cfg.zoneMax;
+            strikeZoneBox.material.color.setHex(inZone ? 0x22c55e : 0xfacc15);
+          }
+
+          if (isUserBatting() && game.autoOffense && !game.autoOffenseSwingScheduled && p >= 0.84) {
+            game.autoOffenseSwingScheduled = true;
+            if (game.pitchType !== 'ball' || Math.random() < 0.15) {
+              executeSwing();
+            }
+          }
+
+          if (!isUserBatting() && !game.cpuSwingScheduled && p >= 0.86) {
+            game.cpuSwingScheduled = true;
+            handleCpuBatterReaction();
+          }
+
+          if (p >= 1.08 && !game.pitchResolved) {
+            game.pitchResolved = true;
+            game.pitchActive = false;
+            if (strikeZoneBox) strikeZoneBox.material.color.setHex(0xfacc15);
+            if (game.pitchType === 'ball') {
+              registerBall();
+            } else {
+              registerStrike('👀 루킹 스트라이크!');
+            }
+          }
+        } else if (battedBallAnim.active && ballMesh) {
+          battedBallAnim.t += dt * 1.15;
+          const t = Math.min(1, battedBallAnim.t);
+          const inv = 1 - t;
+          ballMesh.position.x = inv * inv * battedBallAnim.start.x + 2 * inv * t * battedBallAnim.peak.x + t * t * battedBallAnim.end.x;
+          ballMesh.position.y = inv * inv * battedBallAnim.start.y + 2 * inv * t * battedBallAnim.peak.y + t * t * battedBallAnim.end.y;
+          ballMesh.position.z = inv * inv * battedBallAnim.start.z + 2 * inv * t * battedBallAnim.peak.z + t * t * battedBallAnim.end.z;
+          if (t >= 1) battedBallAnim.active = false;
+        }
+      }
+
+      renderer.render(scene, camera);
     }
 
     window.addEventListener('keydown', (e) => {
@@ -2706,17 +2768,18 @@
     });
 
     window.addEventListener('DOMContentLoaded', () => {
+      ensureAutoCloudRoom();
       restoreSavedSession();
       renderUpgradeShop();
       renderTeamsGrid();
       renderQuiz();
-      loadRankings();
+      refreshQrCode();
+      renderRankingsList();
       renderAdminDashboard();
-      new QRCode(document.getElementById('qrcode-container'), {
-        text: window.location.href,
-        width: 170,
-        height: 170
-      });
+      syncFromCloudServer(false);
+      setInterval(() => {
+        if (!document.hidden) syncFromCloudServer(false);
+      }, 6000);
     });
   </script>
 </body>
