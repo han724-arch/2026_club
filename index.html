@@ -19,7 +19,7 @@
     .action-btn:active { transform: scale(0.96); filter: brightness(1.08); }
     #stadium-wrapper { position: relative; width: 100%; height: clamp(340px, 52vh, 460px); border-radius: 18px; overflow: hidden; background: radial-gradient(circle at 50% 35%, #17253b 0%, #060911 100%); border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65); }
     @media (max-width: 768px) { #stadium-wrapper { height: clamp(280px, 46vh, 380px); } }
-    #three-canvas { width: 100%; height: 100%; display: block; }
+    #three-canvas, #two-d-canvas { width: 100%; height: 100%; display: block; }
     .hud-pill { background: rgba(9, 13, 22, 0.82); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.14); }
     .base-diamond { width: 14px; height: 14px; transform: rotate(45deg); border: 2px solid #94a3b8; background: rgba(15, 23, 42, 0.7); transition: all 0.2s; }
     .base-diamond.active { background: #facc15; border-color: #fef08a; box-shadow: 0 0 12px #facc15; }
@@ -123,19 +123,19 @@
     </div>
   </div>
 
-  <!-- 운영진 간편 얼굴 인증 모달 (Han / Han. / 갸팬 공용) -->
+  <!-- 운영진 2단계 본인 얼굴 일치 인증 모달 (Han / Han. / 갸팬 공용) -->
   <div id="face-auth-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="glass rounded-2xl p-5 max-w-sm w-full border border-rose-500/45 space-y-3.5 shadow-2xl">
+    <div class="glass rounded-2xl p-5 max-w-sm w-full border border-rose-500/45 space-y-3 shadow-2xl">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <span class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-[11px] font-black">🛡️ 운영진 2단계 인증</span>
-          <h3 class="text-base font-black text-white">얼굴 확인 (<span id="face-target-admin">Han</span>)</h3>
+          <span class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-[11px] font-black">🛡️ 운영진 본인 얼굴 대조</span>
+          <h3 class="text-base font-black text-white">얼굴 인증 (<span id="face-target-admin">Han</span>)</h3>
         </div>
         <button onclick="closeFaceAuthModal()" class="text-slate-400 hover:text-white text-sm font-bold px-2 py-1">✕</button>
       </div>
 
-      <p class="text-xs text-slate-300 leading-relaxed">
-        웹캠에 얼굴을 비추면 <b>자동 인식 후 바로 입장</b>됩니다. 카메라가 없으면 아래 사진 선택으로 인증할 수 있습니다.
+      <p id="face-enroll-guide" class="text-xs text-slate-300 leading-relaxed">
+        등록된 운영진 본인 얼굴과 일치해야 입장됩니다. 다른 사람 얼굴은 자동 차단됩니다!
       </p>
 
       <div class="relative rounded-xl overflow-hidden bg-slate-950 border border-white/15 aspect-video flex items-center justify-center">
@@ -145,13 +145,22 @@
         </div>
       </div>
 
-      <p id="face-auth-status" class="text-xs text-center font-bold text-amber-300 min-h-[18px]">얼굴 인식 엔진을 불러오고 있습니다...</p>
+      <p id="face-auth-status" class="text-xs text-center font-bold text-amber-300 min-h-[18px]">128차원 얼굴 특징점 모델을 불러오는 중...</p>
 
       <div class="grid grid-cols-2 gap-2">
         <button onclick="startAdminFaceCamera()" class="py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/15 text-xs font-black text-slate-200">🔄 카메라 재연결</button>
-        <label class="py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-xs font-black text-emerald-300 text-center cursor-pointer">
+        <label class="py-2 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-xs font-black text-sky-300 text-center cursor-pointer">
           🖼️ 사진으로 인증
           <input type="file" accept="image/*" class="hidden" onchange="verifyAdminFaceFromFile(event)" />
+        </label>
+      </div>
+
+      <!-- 최초 1회 또는 기준 사진 등록/교체 버튼 -->
+      <div class="pt-1 border-t border-white/10 flex items-center justify-between gap-2">
+        <span id="face-enrolled-badge" class="text-[11px] font-bold text-slate-400">기준 얼굴 확인 중...</span>
+        <label class="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-[11px] font-black text-amber-300 cursor-pointer">
+          📌 기준 사진 등록/변경
+          <input type="file" accept="image/*" class="hidden" onchange="enrollAdminReferenceFromFile(event)" />
         </label>
       </div>
     </div>
@@ -260,6 +269,7 @@
             <button onclick="toggleSfx()" id="btn-sfx" class="px-2 py-1 rounded-lg text-[11px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">🔊 효과음 ON</button>
             <button onclick="toggleAutoOffense()" id="btn-auto-offense" class="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 border border-white/10">🤖 자동공격 OFF</button>
             <button onclick="toggleAutoDefense()" id="btn-auto-defense" class="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 border border-white/10">🤖 자동수비 OFF</button>
+            <button onclick="toggleViewMode()" id="btn-view-mode" class="px-2.5 py-1 rounded-lg text-[11px] font-black bg-indigo-500/25 text-indigo-300 border border-indigo-400/45 hover:bg-indigo-500/35">🎥 2.5D 아케이드 (2D 전환)</button>
           </div>
 
           <div class="flex flex-wrap items-center gap-1 bg-slate-900/90 px-2 py-1 rounded-xl border border-white/10">
@@ -280,6 +290,7 @@
 
         <div id="stadium-wrapper">
           <canvas id="three-canvas"></canvas>
+          <canvas id="two-d-canvas" class="hidden"></canvas>
 
           <div class="hud-pill absolute top-2.5 left-2.5 rounded-xl px-3 py-2 space-y-1.5 z-10">
             <div class="flex items-center gap-2.5 text-xs font-black">
@@ -510,7 +521,8 @@
       usersDb: 'kbo_festival_2026_users_v10',
       rankingsDb: 'kbo_festival_2026_rankings_v10',
       currentUser: 'kbo_festival_2026_current_user_v10',
-      roomId: 'kbo_festival_2026_room_id_v10'
+      roomId: 'kbo_festival_2026_room_id_v10',
+      adminFaceDescriptors: 'kbo_festival_2026_admin_face_vec_v10'
     };
 
     const CLOUD_API_BASE = 'https://jsonblob.com/api/jsonBlob';
@@ -583,17 +595,52 @@
 
     const DEFAULT_UNLOCKED_TEAMS = ['KIA'];
 
-    // ================= 0-B. 운영진 2단계 초간단 얼굴 인증 모듈 (Han, Han., 갸팬 모두 적용) =================
+    // ================= 0-B. 운영진 2단계 128차원 본인 얼굴 일치 인증 모듈 (Han, Han., 갸팬) =================
     const FACE_MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+    const FACE_MATCH_THRESHOLD = 0.56;
     let faceModelsLoaded = false;
     let faceStream = null;
     let faceScanTimer = null;
     let pendingAdminUsername = null;
 
-    async function ensureSimpleFaceModel() {
+    function getEnrolledAdminFaceVectors() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(STORAGE_KEYS.adminFaceDescriptors) || '[]');
+        if (!Array.isArray(raw)) return [];
+        return raw.filter(arr => Array.isArray(arr) && arr.length === 128).map(arr => new Float32Array(arr));
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveEnrolledAdminFaceVector(descriptor) {
+      const list = getEnrolledAdminFaceVectors();
+      list.push(Array.from(descriptor));
+      localStorage.setItem(STORAGE_KEYS.adminFaceDescriptors, JSON.stringify(list.slice(-3)));
+      updateFaceEnrolledStatusUI();
+    }
+
+    function updateFaceEnrolledStatusUI() {
+      const vectors = getEnrolledAdminFaceVectors();
+      const badge = document.getElementById('face-enrolled-badge');
+      const guide = document.getElementById('face-enroll-guide');
+      if (vectors.length > 0) {
+        if (badge) badge.textContent = `✅ 기준 얼굴 등록됨 (${vectors.length}개)`;
+        if (guide) guide.textContent = '등록된 운영진 본인 얼굴과 128차원 특징점을 대조합니다. 다른 사람 얼굴은 입장할 수 없습니다!';
+      } else {
+        if (badge) badge.textContent = '⚠️ 최초 기준 얼굴 미등록';
+        if (guide) guide.textContent = '최초 1회 본인 얼굴을 등록해야 합니다! [📌 기준 사진 등록]으로 사진을 올리거나 웹캠 정면을 비춰주세요.';
+      }
+    }
+
+    async function ensureFaceRecognitionModels() {
       if (faceModelsLoaded || typeof faceapi === 'undefined') return faceModelsLoaded;
       try {
-        await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL);
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODEL_URL)
+        ]);
         faceModelsLoaded = true;
       } catch (e) {
         faceModelsLoaded = false;
@@ -601,12 +648,24 @@
       return faceModelsLoaded;
     }
 
+    function computeMinFaceDistance(queryDescriptor) {
+      const enrolled = getEnrolledAdminFaceVectors();
+      if (enrolled.length === 0) return null;
+      let minDist = Infinity;
+      enrolled.forEach(ref => {
+        const d = faceapi.euclideanDistance(queryDescriptor, ref);
+        if (d < minDist) minDist = d;
+      });
+      return minDist;
+    }
+
     function openFaceAuthModal(username) {
       pendingAdminUsername = username;
       document.getElementById('face-target-admin').textContent = username;
       document.getElementById('face-auth-modal').classList.remove('hidden');
-      document.getElementById('face-auth-status').textContent = '얼굴 인식 엔진을 불러오고 있습니다...';
+      document.getElementById('face-auth-status').textContent = '128차원 얼굴 인식 모델을 불러오고 있습니다...';
       document.getElementById('face-scan-badge').textContent = '📷 카메라 준비 중...';
+      updateFaceEnrolledStatusUI();
       startAdminFaceCamera();
     }
 
@@ -621,11 +680,12 @@
       pendingAdminUsername = null;
     }
 
-    function completeAdminFaceSuccess() {
+    function completeAdminFaceSuccess(distanceVal) {
       const targetUser = pendingAdminUsername;
       if (!targetUser) return;
-      document.getElementById('face-scan-badge').textContent = '✅ 얼굴 인식 완료!';
-      document.getElementById('face-auth-status').textContent = `✅ [${targetUser}] 운영진 얼굴 확인 완료! 관리실로 이동합니다.`;
+      const simPct = distanceVal !== null ? Math.max(60, Math.min(99, Math.round((1 - distanceVal * 0.65) * 100))) : 95;
+      document.getElementById('face-scan-badge').textContent = `✅ 본인 일치 (${simPct}%)`;
+      document.getElementById('face-auth-status').textContent = `✅ [${targetUser}] 본인 얼굴 확인 완료 (일치도 ${simPct}%)! 관리실로 이동합니다.`;
       playTone(659, 0.1, 'triangle', 0.16);
       setTimeout(() => playTone(880, 0.16, 'triangle', 0.16), 80);
 
@@ -639,8 +699,28 @@
         renderAdminDashboard();
         if (renderer) syncTeamColorsOnField();
         switchTab('admin');
-        showBanner(`👑 운영진 [${targetUser}] 인증 완료!`, '얼굴 인식 및 관리자 권한이 확인되었습니다.');
-      }, 420);
+        showBanner(`👑 운영진 [${targetUser}] 본인 인증 완료!`, `생체 얼굴 일치도 ${simPct}% 확인되었습니다.`);
+      }, 450);
+    }
+
+    async function evaluateDetectedFaceDescriptor(descriptor) {
+      const minDist = computeMinFaceDistance(descriptor);
+      if (minDist === null) {
+        saveEnrolledAdminFaceVector(descriptor);
+        document.getElementById('face-auth-status').textContent = '📌 최초 운영진 기준 얼굴이 안전하게 등록되었습니다!';
+        completeAdminFaceSuccess(0.12);
+        return true;
+      }
+
+      if (minDist <= FACE_MATCH_THRESHOLD) {
+        completeAdminFaceSuccess(minDist);
+        return true;
+      } else {
+        const simPct = Math.max(10, Math.round((1 - minDist * 0.65) * 100));
+        document.getElementById('face-scan-badge').textContent = `⛔ 얼굴 불일치 (${simPct}%)`;
+        document.getElementById('face-auth-status').textContent = `❌ 등록된 운영진 얼굴과 일치하지 않습니다! (일치도 ${simPct}% · 타인 차단됨)`;
+        return false;
+      }
     }
 
     async function startAdminFaceCamera() {
@@ -649,11 +729,16 @@
       const statusEl = document.getElementById('face-auth-status');
       const badgeEl = document.getElementById('face-scan-badge');
 
-      await ensureSimpleFaceModel();
+      const ready = await ensureFaceRecognitionModels();
+      if (!ready) {
+        badgeEl.textContent = '⚠️ AI 모델 로드 지연';
+        statusEl.textContent = '네트워크 상태를 확인하거나 [🖼️ 사진으로 인증]을 이용해 주세요.';
+        return;
+      }
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         badgeEl.textContent = '⚠️ 카메라 미지원 기기';
-        statusEl.textContent = '카메라가 없는 환경입니다. 오른쪽 [🖼️ 사진으로 인증]을 눌러주세요!';
+        statusEl.textContent = '카메라가 없는 환경입니다. [🖼️ 사진으로 인증] 또는 [📌 기준 사진 등록]을 사용해 주세요!';
         return;
       }
 
@@ -666,60 +751,81 @@
         }
         video.srcObject = faceStream;
         await video.play();
-        badgeEl.textContent = '🔍 정면 얼굴을 비춰주세요';
-        statusEl.textContent = '카메라에 얼굴이 인식되면 자동으로 통과됩니다!';
+
+        const hasRef = getEnrolledAdminFaceVectors().length > 0;
+        badgeEl.textContent = hasRef ? '🔍 등록된 운영진 얼굴 대조 중' : '📌 최초 기준 얼굴 스캔 중';
+        statusEl.textContent = hasRef
+          ? '카메라 정면에 운영진 본인 얼굴을 비춰주세요. 타인은 차단됩니다.'
+          : '최초 1회 등록입니다. 카메라 정면을 바라보시거나 하단 [📌 기준 사진 등록]을 눌러주세요.';
 
         faceScanTimer = setInterval(async () => {
           if (!pendingAdminUsername || video.readyState < 2) return;
-          if (!faceModelsLoaded) {
-            completeAdminFaceSuccess();
-            return;
-          }
           try {
-            const det = await faceapi.detectSingleFace(
-              video,
-              new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.35 })
-            );
-            if (det) {
-              clearInterval(faceScanTimer);
-              completeAdminFaceSuccess();
+            const det = await faceapi
+              .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.45 }))
+              .withFaceLandmarks()
+              .withFaceDescriptor();
+            if (det && det.descriptor) {
+              const passed = await evaluateDetectedFaceDescriptor(det.descriptor);
+              if (passed) clearInterval(faceScanTimer);
             }
           } catch (e) {}
-        }, 450);
+        }, 650);
       } catch (err) {
         badgeEl.textContent = '⚠️ 카메라 권한 차단됨';
-        statusEl.textContent = '웹캠을 열 수 없습니다. 오른쪽 [🖼️ 사진으로 인증] 버튼을 눌러주세요!';
+        statusEl.textContent = '웹캠을 열 수 없습니다. [🖼️ 사진으로 인증] 버튼을 눌러 본인 사진을 선택하세요!';
       }
+    }
+
+    async function extractDescriptorFromImageFile(file) {
+      await ensureFaceRecognitionModels();
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = async () => {
+          try {
+            const det = await faceapi
+              .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 }))
+              .withFaceLandmarks()
+              .withFaceDescriptor();
+            if (det && det.descriptor) resolve(det.descriptor);
+            else reject(new Error('NO_FACE'));
+          } catch (err) {
+            reject(err);
+          }
+        };
+        img.onerror = () => reject(new Error('IMG_LOAD_FAIL'));
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    async function enrollAdminReferenceFromFile(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const statusEl = document.getElementById('face-auth-status');
+      statusEl.textContent = '📌 선택한 사진에서 128차원 얼굴 특징을 추출하여 등록 중...';
+      try {
+        const desc = await extractDescriptorFromImageFile(file);
+        localStorage.setItem(STORAGE_KEYS.adminFaceDescriptors, JSON.stringify([Array.from(desc)]));
+        updateFaceEnrolledStatusUI();
+        statusEl.textContent = '✅ 운영진 기준 얼굴 사진 등록 완료! 이제 본인 얼굴로 인증할 수 있습니다.';
+        playTone(587, 0.12, 'triangle', 0.15);
+      } catch (e) {
+        statusEl.textContent = '❌ 사진에서 정면 얼굴을 찾지 못했습니다. 얼굴이 선명한 사진을 선택해 주세요.';
+      }
+      event.target.value = '';
     }
 
     async function verifyAdminFaceFromFile(event) {
       const file = event.target.files && event.target.files[0];
       if (!file || !pendingAdminUsername) return;
       const statusEl = document.getElementById('face-auth-status');
-      statusEl.textContent = '🖼️ 선택한 사진에서 얼굴을 확인 중입니다...';
-
-      await ensureSimpleFaceModel();
-      const img = new Image();
-      img.onload = async () => {
-        if (!faceModelsLoaded) {
-          completeAdminFaceSuccess();
-          return;
-        }
-        try {
-          const det = await faceapi.detectSingleFace(
-            img,
-            new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 })
-          );
-          if (det) {
-            completeAdminFaceSuccess();
-          } else {
-            statusEl.textContent = '❌ 사진에서 얼굴이 감지되지 않았습니다. 정면 얼굴 사진을 선택해 주세요!';
-          }
-        } catch (e) {
-          completeAdminFaceSuccess();
-        }
-      };
-      img.src = URL.createObjectURL(file);
+      statusEl.textContent = '🖼️ 선택한 사진의 얼굴과 등록된 운영진 얼굴을 대조 중...';
+      try {
+        const desc = await extractDescriptorFromImageFile(file);
+        await evaluateDetectedFaceDescriptor(desc);
+      } catch (e) {
+        statusEl.textContent = '❌ 사진에서 얼굴이 감지되지 않았습니다. 정면 얼굴 사진을 선택해 주세요!';
+      }
       event.target.value = '';
     }
 
@@ -799,6 +905,7 @@
     // ================= 3. 게임 상태 & 계정 관리 =================
     const game = {
       unlocked: false,
+      viewMode: '3D',
       mode: '1P',
       difficulty: 3,
       autoOffense: false,
@@ -1192,7 +1299,7 @@
       }
 
       if (isAdminCredential(username, pin)) {
-        msg.textContent = `🛡️ [${username}] 운영진 2단계 얼굴 확인을 진행합니다...`;
+        msg.textContent = `🛡️ [${username}] 운영진 본인 얼굴 대조 인증을 진행합니다...`;
         closeAuthModal();
         openFaceAuthModal(username);
         return;
@@ -1791,6 +1898,7 @@
           handleResize();
           syncTeamColorsOnField();
           updateScoreboardUI();
+          if (game.viewMode === '2D') draw2DStadium();
           if (isUserBatting()) scheduleNextPitch(1100);
           else if (game.autoDefense) scheduleAutoDefensePitch(1000);
         }
@@ -2469,14 +2577,43 @@
       }
     }
 
-    // ================= 6. 리얼 3D Three.js 야구장 & 투타 물리 엔진 =================
+    // ================= 6. 리얼 3D 풀 스펙 야구장 & 레트로 2D 전환 엔진 =================
     let scene = null, camera = null, renderer = null;
-    let ballMesh = null, batPivot = null, strikeZoneBox = null;
-    let pitcherGroup = null, batterGroup = null;
+    let ballMesh = null, batPivot = null, strikeZoneBox = null, sweetSpotRing = null;
+    let pitcherGroup = null, batterGroup = null, catcherGroup = null;
     let runnerMeshes = [];
+    let fielderMeshes = [];
     let swingAnimProgress = -1;
-    let battedBallAnim = { active: false, t: 0, start: null, peak: null, end: null };
+    let battedBallAnim = { active: false, t: 0, start: null, peak: null, end: null, basesHit: 1 };
     let lastFrameTime = performance.now();
+
+    function toggleViewMode() {
+      game.viewMode = game.viewMode === '3D' ? '2D' : '3D';
+      const c3d = document.getElementById('three-canvas');
+      const c2d = document.getElementById('two-d-canvas');
+      const btn = document.getElementById('btn-view-mode');
+
+      if (game.viewMode === '2D') {
+        if (c3d) c3d.classList.add('hidden');
+        if (c2d) c2d.classList.remove('hidden');
+        if (btn) {
+          btn.textContent = '🕹️ 2D 클래식 (2.5D 전환)';
+          btn.className = 'px-2.5 py-1 rounded-lg text-[11px] font-black bg-emerald-500/25 text-emerald-300 border border-emerald-400/45 hover:bg-emerald-500/35';
+        }
+        handleResize();
+        draw2DStadium();
+        showBanner('🕹️ 2D 아케이드 뷰 전환!', '고전 야구 게임 감성의 탑뷰 다이아몬드 화면입니다.');
+      } else {
+        if (c2d) c2d.classList.add('hidden');
+        if (c3d) c3d.classList.remove('hidden');
+        if (btn) {
+          btn.textContent = '🎥 2.5D 아케이드 (2D 전환)';
+          btn.className = 'px-2.5 py-1 rounded-lg text-[11px] font-black bg-indigo-500/25 text-indigo-300 border border-indigo-400/45 hover:bg-indigo-500/35';
+        }
+        handleResize();
+        showBanner('🎥 2.5D 아케이드 쿼터뷰 전환!', '2D 탑뷰 감성을 살린 직교 아이소메트릭 입체 구장입니다.');
+      }
+    }
 
     function isUserBatting() {
       if (game.mode === 'HR' || game.mode === '2P') return true;
@@ -2508,31 +2645,38 @@
       }
     }
 
-    function createPlayerFigure(jerseyHex, capHex) {
+    function createPlayerFigure(jerseyHex, capHex, scale = 1) {
       const group = new THREE.Group();
-      const bodyMat = new THREE.MeshStandardMaterial({ color: jerseyHex, roughness: 0.55 });
-      const pantsMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.65 });
-      const skinMat = new THREE.MeshStandardMaterial({ color: 0xfcd34d, roughness: 0.5 });
-      const capMat = new THREE.MeshStandardMaterial({ color: capHex, roughness: 0.5 });
+      const bodyMat = new THREE.MeshToonMaterial({ color: jerseyHex });
+      const pantsMat = new THREE.MeshToonMaterial({ color: 0xf8fafc });
+      const skinMat = new THREE.MeshToonMaterial({ color: 0xfde68a });
+      const capMat = new THREE.MeshToonMaterial({ color: capHex });
 
-      const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.22, 0.9, 12), pantsMat);
-      legs.position.y = 0.45;
+      const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.23, 0.92, 12), pantsMat);
+      legs.position.y = 0.46;
       group.add(legs);
 
-      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.26, 0.95, 14), bodyMat);
-      torso.position.y = 1.35;
+      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.37, 0.29, 0.98, 14), bodyMat);
+      torso.position.y = 1.38;
       group.add(torso);
 
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 16), skinMat);
-      head.position.y = 2.05;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 16), skinMat);
+      head.position.y = 2.12;
       group.add(head);
 
-      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.27, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), capMat);
-      cap.position.y = 2.08;
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.33, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.56), capMat);
+      cap.position.y = 2.16;
       group.add(cap);
 
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.24), capMat);
+      visor.position.set(0, 2.14, 0.26);
+      group.add(visor);
+
+      group.scale.setScalar(scale * 1.18);
       return group;
     }
+
+    const ORTHO_VIEW_SIZE = 21.5;
 
     function initThree() {
       const wrapper = document.getElementById('stadium-wrapper');
@@ -2540,71 +2684,161 @@
       if (!wrapper || !canvas || typeof THREE === 'undefined') return;
 
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x091326);
-      scene.fog = new THREE.FogExp2(0x091326, 0.0085);
+      scene.background = new THREE.Color(0x0b1628);
 
-      camera = new THREE.PerspectiveCamera(46, wrapper.clientWidth / wrapper.clientHeight, 0.1, 300);
-      camera.position.set(0, 3.35, 8.2);
-      camera.lookAt(0, 1.35, -14);
+      const aspect = (wrapper.clientWidth || 640) / (wrapper.clientHeight || 380);
+      camera = new THREE.OrthographicCamera(
+        -ORTHO_VIEW_SIZE * aspect,
+        ORTHO_VIEW_SIZE * aspect,
+        ORTHO_VIEW_SIZE,
+        -ORTHO_VIEW_SIZE,
+        0.1,
+        260
+      );
+      camera.position.set(0, 44, 24);
+      camera.lookAt(0, 0, -23);
 
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
 
-      const hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x0f172a, 1.15);
-      scene.add(hemiLight);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.05);
+      scene.add(ambientLight);
 
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.05);
-      dirLight.position.set(14, 28, 16);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.45);
+      dirLight.position.set(12, 42, 18);
       scene.add(dirLight);
 
-      const grass = new THREE.Mesh(
-        new THREE.CircleGeometry(95, 48),
-        new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.85 })
+      // 부채꼴 외야 잔디 (홈플레이트 원점 기준 좌측 -45도 ~ 우측 +45도, 정확히 90도 부채꼴)
+      const outerSector = new THREE.Mesh(
+        new THREE.CircleGeometry(76, 64, Math.PI * 0.25, Math.PI * 0.50),
+        new THREE.MeshBasicMaterial({ color: 0x15803d })
       );
-      grass.rotation.x = -Math.PI / 2;
-      scene.add(grass);
+      outerSector.rotation.x = -Math.PI / 2;
+      outerSector.position.set(0, 0, 2);
+      scene.add(outerSector);
+
+      const innerSector = new THREE.Mesh(
+        new THREE.CircleGeometry(66, 64, Math.PI * 0.25, Math.PI * 0.50),
+        new THREE.MeshBasicMaterial({ color: 0x16a34a })
+      );
+      innerSector.rotation.x = -Math.PI / 2;
+      innerSector.position.set(0, 0.01, 2);
+      scene.add(innerSector);
 
       const infieldDirt = new THREE.Mesh(
-        new THREE.PlaneGeometry(24, 24),
-        new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.9 })
+        new THREE.PlaneGeometry(25, 25),
+        new THREE.MeshBasicMaterial({ color: 0xd97706 })
       );
       infieldDirt.rotation.x = -Math.PI / 2;
       infieldDirt.rotation.z = Math.PI / 4;
-      infieldDirt.position.set(0, 0.02, -13);
+      infieldDirt.position.set(0, 0.025, -13.5);
       scene.add(infieldDirt);
 
-      const mound = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.7, 2.2, 0.22, 24),
-        new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9 })
+      const infieldGrassDiamond = new THREE.Mesh(
+        new THREE.PlaneGeometry(15.5, 15.5),
+        new THREE.MeshBasicMaterial({ color: 0x16a34a })
       );
-      mound.position.set(0, 0.11, -15.5);
+      infieldGrassDiamond.rotation.x = -Math.PI / 2;
+      infieldGrassDiamond.rotation.z = Math.PI / 4;
+      infieldGrassDiamond.position.set(0, 0.032, -13.5);
+      scene.add(infieldGrassDiamond);
+
+      const mound = new THREE.Mesh(
+        new THREE.CylinderGeometry(2.1, 2.4, 0.14, 28),
+        new THREE.MeshBasicMaterial({ color: 0xd97706 })
+      );
+      mound.position.set(0, 0.07, -15.5);
       scene.add(mound);
 
-      const wall = new THREE.Mesh(
-        new THREE.CylinderGeometry(82, 82, 4.2, 48, 1, true, Math.PI * 0.65, Math.PI * 0.7),
-        new THREE.MeshStandardMaterial({ color: 0x1e3a8a, side: THREE.DoubleSide, roughness: 0.6 })
+      const rubber = new THREE.Mesh(
+        new THREE.BoxGeometry(0.75, 0.04, 0.22),
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
       );
-      wall.position.set(0, 2.1, -6);
+      rubber.position.set(0, 0.16, -15.5);
+      scene.add(rubber);
+
+      // 좌·우 파울 라인 (홈플레이트에서 -Z 외야 양 끝까지)
+      const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const leftFoulLine = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 74), lineMat);
+      leftFoulLine.rotation.x = -Math.PI / 2;
+      leftFoulLine.rotation.z = Math.PI / 4;
+      leftFoulLine.position.set(-26.1, 0.04, -24.1);
+      scene.add(leftFoulLine);
+
+      const rightFoulLine = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 74), lineMat);
+      rightFoulLine.rotation.x = -Math.PI / 2;
+      rightFoulLine.rotation.z = -Math.PI / 4;
+      rightFoulLine.position.set(26.1, 0.04, -24.1);
+      scene.add(rightFoulLine);
+
+      // 외야 펜스 & 노란 상단 패드 (thetaStart = 0.75*PI, thetaLength = 0.5*PI -> -Z 방향 부채꼴 호)
+      const wall = new THREE.Mesh(
+        new THREE.CylinderGeometry(74, 74, 2.4, 64, 1, true, Math.PI * 0.75, Math.PI * 0.50),
+        new THREE.MeshBasicMaterial({ color: 0x1e3a8a, side: THREE.DoubleSide })
+      );
+      wall.position.set(0, 1.2, 2);
       scene.add(wall);
 
-      const plate = new THREE.Mesh(
-        new THREE.BoxGeometry(0.75, 0.05, 0.75),
-        new THREE.MeshStandardMaterial({ color: 0xffffff })
+      const wallTopPad = new THREE.Mesh(
+        new THREE.TorusGeometry(74, 0.38, 8, 64, Math.PI * 0.50),
+        new THREE.MeshBasicMaterial({ color: 0xfacc15 })
       );
-      plate.position.set(0, 0.03, 0);
+      wallTopPad.rotation.x = Math.PI / 2;
+      wallTopPad.rotation.z = Math.PI * 0.25;
+      wallTopPad.position.set(0, 2.42, 2);
+      scene.add(wallTopPad);
+
+      // 좌·우 노란 파울폴
+      [-52.3, 52.3].forEach(px => {
+        const pole = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.32, 0.32, 9, 12),
+          new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+        );
+        pole.position.set(px, 4.5, -50.3);
+        scene.add(pole);
+      });
+
+      const plate = new THREE.Mesh(
+        new THREE.BoxGeometry(0.95, 0.06, 0.95),
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
+      );
+      plate.position.set(0, 0.04, 0);
       scene.add(plate);
 
+      const basePositions = [
+        [12.2, 0.06, -13.5],
+        [0, 0.06, -25.7],
+        [-12.2, 0.06, -13.5]
+      ];
+      basePositions.forEach(([bx, by, bz]) => {
+        const b = new THREE.Mesh(
+          new THREE.BoxGeometry(1.05, 0.08, 1.05),
+          new THREE.MeshBasicMaterial({ color: 0xffffff })
+        );
+        b.rotation.y = Math.PI / 4;
+        b.position.set(bx, by, bz);
+        scene.add(b);
+      });
+
       strikeZoneBox = new THREE.Mesh(
-        new THREE.BoxGeometry(0.95, 1.05, 0.12),
-        new THREE.MeshBasicMaterial({ color: 0xfacc15, wireframe: true, transparent: true, opacity: 0.55 })
+        new THREE.BoxGeometry(1.15, 1.15, 0.14),
+        new THREE.MeshBasicMaterial({ color: 0xfacc15, wireframe: true, transparent: true, opacity: 0.75 })
       );
       strikeZoneBox.position.set(0, 1.15, 0);
       scene.add(strikeZoneBox);
 
+      sweetSpotRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.45, 0.65, 24),
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.65 })
+      );
+      sweetSpotRing.rotation.x = -Math.PI / 2;
+      sweetSpotRing.position.set(0, 0.12, 0);
+      scene.add(sweetSpotRing);
+
       ballMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.14, 16, 16),
-        new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x334155, roughness: 0.35 })
+        new THREE.SphereGeometry(0.24, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
       );
       ballMesh.position.set(0, 1.65, -15.2);
       scene.add(ballMesh);
@@ -2612,28 +2846,36 @@
       batPivot = new THREE.Group();
       batPivot.position.set(-0.78, 1.15, 0.25);
       const batMesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.055, 0.035, 1.25, 12),
-        new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.4 })
+        new THREE.CylinderGeometry(0.08, 0.05, 1.45, 12),
+        new THREE.MeshBasicMaterial({ color: 0xf59e0b })
       );
-      batMesh.position.set(0.55, 0.1, 0);
+      batMesh.position.set(0.62, 0.1, 0);
       batMesh.rotation.z = -Math.PI / 2.6;
       batPivot.add(batMesh);
       scene.add(batPivot);
 
-      const baseCoords = [
-        [11.5, 0.6, -13],
-        [0, 0.6, -24.5],
-        [-11.5, 0.6, -13]
+      const runnerCoords = [
+        [12.4, 0, -13.5],
+        [0, 0, -25.9],
+        [-12.4, 0, -13.5]
       ];
-      runnerMeshes = baseCoords.map(([x, y, z]) => {
-        const m = new THREE.Mesh(
-          new THREE.ConeGeometry(0.45, 1.2, 12),
-          new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xca8a04 })
-        );
+      runnerMeshes = runnerCoords.map(([x, y, z]) => {
+        const m = createPlayerFigure(0xfacc15, 0xdc2626, 0.88);
         m.position.set(x, y, z);
         m.visible = false;
         scene.add(m);
         return m;
+      });
+
+      const fielderCoords = [
+        [13.5, -15.5], [-13.5, -15.5], [6.5, -24.5], [-6.5, -24.5],
+        [-25, -43], [0, -52], [25, -43]
+      ];
+      fielderMeshes = fielderCoords.map(([fx, fz]) => {
+        const f = createPlayerFigure(0x1d4ed8, 0x0f172a, 0.92);
+        f.position.set(fx, 0, fz);
+        scene.add(f);
+        return f;
       });
 
       syncTeamColorsOnField();
@@ -2644,46 +2886,273 @@
 
     function handleResize() {
       const wrapper = document.getElementById('stadium-wrapper');
-      if (!wrapper || !renderer || !camera) return;
+      if (!wrapper) return;
       const w = wrapper.clientWidth || 640;
       const h = wrapper.clientHeight || 380;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+
+      if (renderer && camera) {
+        const aspect = w / h;
+        camera.left = -ORTHO_VIEW_SIZE * aspect;
+        camera.right = ORTHO_VIEW_SIZE * aspect;
+        camera.top = ORTHO_VIEW_SIZE;
+        camera.bottom = -ORTHO_VIEW_SIZE;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      }
+
+      const c2d = document.getElementById('two-d-canvas');
+      if (c2d) {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        c2d.width = Math.round(w * dpr);
+        c2d.height = Math.round(h * dpr);
+      }
     }
 
     function syncTeamColorsOnField() {
-      if (!scene) return;
       const awayObj = KBO_TEAMS.find(t => t.id === game.awayTeamId) || KBO_TEAMS[0];
       const homeObj = KBO_TEAMS.find(t => t.id === game.homeTeamId) || KBO_TEAMS[1];
       const battingTeam = game.isTop ? awayObj : homeObj;
       const fieldingTeam = game.isTop ? homeObj : awayObj;
 
-      if (pitcherGroup) scene.remove(pitcherGroup);
-      if (batterGroup) scene.remove(batterGroup);
+      if (scene) {
+        if (pitcherGroup) scene.remove(pitcherGroup);
+        if (batterGroup) scene.remove(batterGroup);
+        if (catcherGroup) scene.remove(catcherGroup);
 
-      pitcherGroup = createPlayerFigure(fieldingTeam.primary, fieldingTeam.cap);
-      pitcherGroup.position.set(0, 0.2, -15.6);
-      scene.add(pitcherGroup);
+        pitcherGroup = createPlayerFigure(fieldingTeam.primary, fieldingTeam.cap, 1.04);
+        pitcherGroup.position.set(0, 0.25, -15.6);
+        scene.add(pitcherGroup);
 
-      batterGroup = createPlayerFigure(battingTeam.primary, battingTeam.cap);
-      batterGroup.position.set(-1.05, 0, 0.2);
-      batterGroup.rotation.y = Math.PI * 0.45;
-      scene.add(batterGroup);
+        batterGroup = createPlayerFigure(battingTeam.primary, battingTeam.cap, 1.04);
+        batterGroup.position.set(-1.05, 0, 0.2);
+        batterGroup.rotation.y = Math.PI * 0.45;
+        scene.add(batterGroup);
+
+        catcherGroup = createPlayerFigure(fieldingTeam.primary, fieldingTeam.cap, 0.96);
+        catcherGroup.position.set(0, 0, 1.65);
+        catcherGroup.rotation.y = Math.PI;
+        scene.add(catcherGroup);
+
+        fielderMeshes.forEach(f => {
+          if (f.children[1]) f.children[1].material.color.setHex(fieldingTeam.primary);
+          if (f.children[3]) f.children[3].material.color.setHex(fieldingTeam.cap);
+        });
+      }
     }
 
     function launchBattedBallVisual(basesHit) {
       if (!ballMesh) return;
-      const spreadX = (Math.random() - 0.5) * (basesHit === 4 ? 26 : 18);
-      const distZ = basesHit === 4 ? -96 : basesHit === 3 ? -68 : basesHit === 2 ? -54 : -30;
-      const peakY = basesHit === 4 ? 22 : basesHit >= 2 ? 12 : 4.2;
+      const spreadX = (Math.random() - 0.5) * (basesHit === 4 ? 32 : 22);
+      const distZ = basesHit === 4 ? -96 : basesHit === 3 ? -68 : basesHit === 2 ? -52 : -30;
+      const peakY = basesHit === 4 ? 22 : basesHit >= 2 ? 12 : 4.5;
       battedBallAnim = {
         active: true,
         t: 0,
+        basesHit,
         start: new THREE.Vector3(0, 1.15, 0),
         peak: new THREE.Vector3(spreadX * 0.5, peakY, distZ * 0.5),
         end: new THREE.Vector3(spreadX, 0.3, distZ)
       };
+    }
+
+    // ================= 6-B. 레트로 2D 클래식 탑뷰 야구장 렌더러 =================
+    function draw2DStadium() {
+      const c2d = document.getElementById('two-d-canvas');
+      if (!c2d) return;
+      const ctx = c2d.getContext('2d');
+      const w = c2d.width;
+      const h = c2d.height;
+      if (!w || !h) return;
+
+      const awayObj = KBO_TEAMS.find(t => t.id === game.awayTeamId) || KBO_TEAMS[0];
+      const homeObj = KBO_TEAMS.find(t => t.id === game.homeTeamId) || KBO_TEAMS[1];
+      const battingTeam = game.isTop ? awayObj : homeObj;
+      const fieldingTeam = game.isTop ? homeObj : awayObj;
+      const batHex = '#' + battingTeam.primary.toString(16).padStart(6, '0');
+      const fldHex = '#' + fieldingTeam.primary.toString(16).padStart(6, '0');
+
+      ctx.clearRect(0, 0, w, h);
+
+      const bgGrad = ctx.createRadialGradient(w * 0.5, h * 0.85, 20, w * 0.5, h * 0.85, Math.max(w, h) * 0.9);
+      bgGrad.addColorStop(0, '#16a34a');
+      bgGrad.addColorStop(0.65, '#15803d');
+      bgGrad.addColorStop(1, '#0f5132');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      const homeX = w * 0.5;
+      const homeY = h * 0.86;
+      const baseDist = Math.min(w * 0.24, h * 0.26);
+      const firstX = homeX + baseDist;
+      const firstY = homeY - baseDist;
+      const secondX = homeX;
+      const secondY = homeY - baseDist * 2;
+      const thirdX = homeX - baseDist;
+      const thirdY = homeY - baseDist;
+      const moundX = homeX;
+      const moundY = homeY - baseDist;
+
+      const fenceR = Math.min(w * 0.46, h * 0.74);
+      ctx.beginPath();
+      ctx.arc(homeX, homeY, fenceR, Math.PI * 1.18, Math.PI * 1.82);
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = Math.max(4, w * 0.006);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(homeX, homeY);
+      ctx.lineTo(homeX - fenceR * 0.85, homeY - fenceR * 0.85);
+      ctx.moveTo(homeX, homeY);
+      ctx.lineTo(homeX + fenceR * 0.85, homeY - fenceR * 0.85);
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(homeX, homeY + 14);
+      ctx.lineTo(firstX + 18, firstY);
+      ctx.lineTo(secondX, secondY - 18);
+      ctx.lineTo(thirdX - 18, thirdY);
+      ctx.closePath();
+      ctx.fillStyle = '#9a4712';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(homeX, homeY - 22);
+      ctx.lineTo(firstX - 18, firstY);
+      ctx.lineTo(secondX, secondY + 22);
+      ctx.lineTo(thirdX + 18, thirdY);
+      ctx.closePath();
+      ctx.fillStyle = '#16a34a';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(moundX, moundY, Math.max(10, baseDist * 0.13), 0, Math.PI * 2);
+      ctx.fillStyle = '#9a4712';
+      ctx.fill();
+
+      [
+        [homeX, homeY],
+        [firstX, firstY],
+        [secondX, secondY],
+        [thirdX, thirdY]
+      ].forEach(([bx, by]) => {
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-7, -7, 14, 14);
+        ctx.restore();
+      });
+
+      const cfg = getLevelCfg();
+      const inSweet = game.pitchActive && game.pitchProgress >= cfg.zoneMin && game.pitchProgress <= cfg.zoneMax;
+      ctx.beginPath();
+      ctx.arc(homeX, homeY, 26, 0, Math.PI * 2);
+      ctx.strokeStyle = inSweet ? '#22c55e' : 'rgba(250, 204, 21, 0.65)';
+      ctx.lineWidth = inSweet ? 5 : 2.5;
+      ctx.stroke();
+
+      const fielders2D = [
+        [homeX + baseDist * 1.15, firstY - 12, '1B'],
+        [homeX + baseDist * 0.55, secondY + 12, '2B'],
+        [homeX - baseDist * 0.55, secondY + 12, 'SS'],
+        [homeX - baseDist * 1.15, thirdY - 12, '3B'],
+        [homeX - fenceR * 0.45, homeY - fenceR * 0.62, 'LF'],
+        [homeX, homeY - fenceR * 0.82, 'CF'],
+        [homeX + fenceR * 0.45, homeY - fenceR * 0.62, 'RF']
+      ];
+      fielders2D.forEach(([fx, fy, pos]) => {
+        ctx.beginPath();
+        ctx.arc(fx, fy, 9, 0, Math.PI * 2);
+        ctx.fillStyle = fldHex;
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(pos, fx, fy - 12);
+      });
+
+      ctx.beginPath();
+      ctx.arc(moundX, moundY, 10, 0, Math.PI * 2);
+      ctx.fillStyle = fldHex;
+      ctx.fill();
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(homeX - 18, homeY, 10, 0, Math.PI * 2);
+      ctx.fillStyle = batHex;
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.save();
+      ctx.translate(homeX - 14, homeY);
+      const swingAngle = swingAnimProgress >= 0 ? (-0.7 + Math.sin(swingAnimProgress * Math.PI) * 2.1) : -0.7;
+      ctx.rotate(swingAngle);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(0, -3, 28, 6);
+      ctx.restore();
+
+      const runnerCoords2D = [
+        [firstX + 12, firstY],
+        [secondX, secondY - 14],
+        [thirdX - 12, thirdY]
+      ];
+      [0, 1, 2].forEach(idx => {
+        if (!game.bases[idx]) return;
+        const [rx, ry] = runnerCoords2D[idx];
+        ctx.beginPath();
+        ctx.arc(rx, ry, 9, 0, Math.PI * 2);
+        ctx.fillStyle = '#facc15';
+        ctx.fill();
+        ctx.strokeStyle = '#090d16';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+
+      let ballX = moundX;
+      let ballY = moundY;
+      let ballR = 6;
+      if (game.pitchActive && !game.pitchResolved) {
+        const p = Math.min(1.08, game.pitchProgress);
+        const curveOffset = game.pitchType === 'breaking'
+          ? Math.sin(p * Math.PI) * 24 * cfg.curveScale
+          : game.pitchType === 'ball'
+            ? Math.pow(p, 1.5) * 34
+            : 0;
+        ballX = moundX + curveOffset;
+        ballY = moundY + (homeY - moundY) * p;
+        ballR = 5.5 + Math.sin(p * Math.PI) * 2.5;
+      } else if (battedBallAnim.active) {
+        const t = Math.min(1, battedBallAnim.t);
+        const ratioX = (battedBallAnim.end.x / 40) * (fenceR * 0.95);
+        const ratioY = (Math.abs(battedBallAnim.end.z) / 96) * (fenceR * 0.98);
+        ballX = homeX + ratioX * t;
+        ballY = homeY - ratioY * t;
+        ballR = 6 + Math.sin(t * Math.PI) * 5;
+      }
+
+      ctx.beginPath();
+      ctx.arc(ballX, ballY, ballR, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(9, 13, 22, 0.72)';
+      ctx.fillRect(w * 0.5 - 135, h - 28, 270, 20);
+      ctx.fillStyle = inSweet ? '#4ade80' : '#fde047';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(inSweet ? '🔥 지금 SWING! (초록불 스윗스팟)' : '🕹️ 2D CLASSIC TOP-DOWN VIEW', w * 0.5, h - 14);
     }
 
     function animateThree(now) {
@@ -2717,9 +3186,17 @@
           const arcY = 1.65 - p * 0.48 + Math.sin(p * Math.PI) * 0.22;
           ballMesh.position.set(curveX, arcY, z);
 
+          if (pitcherGroup) {
+            pitcherGroup.rotation.x = p < 0.25 ? Math.sin((p / 0.25) * Math.PI) * 0.35 : 0;
+          }
+
           if (strikeZoneBox) {
             const inZone = p >= cfg.zoneMin && p <= cfg.zoneMax;
             strikeZoneBox.material.color.setHex(inZone ? 0x22c55e : 0xfacc15);
+            if (sweetSpotRing) {
+              sweetSpotRing.material.color.setHex(inZone ? 0x22c55e : 0x38bdf8);
+              sweetSpotRing.scale.setScalar(inZone ? 1.25 : 1.0);
+            }
           }
 
           if (isUserBatting() && game.autoOffense && !game.autoOffenseSwingScheduled && p >= 0.84) {
@@ -2751,11 +3228,29 @@
           ballMesh.position.x = inv * inv * battedBallAnim.start.x + 2 * inv * t * battedBallAnim.peak.x + t * t * battedBallAnim.end.x;
           ballMesh.position.y = inv * inv * battedBallAnim.start.y + 2 * inv * t * battedBallAnim.peak.y + t * t * battedBallAnim.end.y;
           ballMesh.position.z = inv * inv * battedBallAnim.start.z + 2 * inv * t * battedBallAnim.peak.z + t * t * battedBallAnim.end.z;
+
+          const camBoost = Math.sin(t * Math.PI);
+          camera.zoom = 1 - camBoost * 0.28;
+          camera.updateProjectionMatrix();
+          camera.position.lerp(new THREE.Vector3(ballMesh.position.x * 0.25, 44, 24 - camBoost * 16), 0.14);
+          camera.lookAt(ballMesh.position.x * 0.35, 0, Math.min(-23, ballMesh.position.z * 0.45));
+
           if (t >= 1) battedBallAnim.active = false;
+        } else {
+          if (Math.abs(camera.zoom - 1) > 0.002) {
+            camera.zoom += (1 - camera.zoom) * 0.14;
+            camera.updateProjectionMatrix();
+          }
+          camera.position.lerp(new THREE.Vector3(0, 44, 24), 0.14);
+          camera.lookAt(0, 0, -23);
         }
       }
 
-      renderer.render(scene, camera);
+      if (game.viewMode === '2D') {
+        draw2DStadium();
+      } else {
+        renderer.render(scene, camera);
+      }
     }
 
     window.addEventListener('keydown', (e) => {
