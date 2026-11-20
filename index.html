@@ -7,6 +7,91 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // =========================================================================
+    // [Vercel / GitHub 외부 배포용 Supabase 설정]
+    // 본인의 Supabase 대시보드 -> Project Settings -> API 에서 복사해 붙여넣으세요!
+    // =========================================================================
+    const SUPABASE_URL = "";
+    const SUPABASE_ANON_KEY = "";
+
+    window.__cloudBridge = {
+      ready: false,
+      statusText: '🟡 Supabase 설정 대기 중 (URL / Anon Key 입력 필요)',
+      client: null,
+      usersCache: {},
+      rankingsCache: []
+    };
+
+    async function initSupabaseSync() {
+      try {
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !window.supabase) {
+          updateCloudStatusBadge();
+          return;
+        }
+
+        const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        window.__cloudBridge.client = client;
+
+        await fetchSupabaseAll();
+
+        window.__cloudBridge.ready = true;
+        window.__cloudBridge.statusText = '🟢 Supabase 실시간 클라우드 연결 완료 (전 기기 동기화 중)';
+        updateCloudStatusBadge();
+
+        client
+          .channel('festival-live-sync')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'festival_users' }, () => fetchSupabaseAll())
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'festival_rankings' }, () => fetchSupabaseAll())
+          .subscribe();
+      } catch (e) {
+        console.warn('Supabase init error:', e);
+        window.__cloudBridge.statusText = '🔴 Supabase 연결 실패: ' + (e.message || '설정 확인');
+        updateCloudStatusBadge();
+      }
+    }
+
+    async function fetchSupabaseAll() {
+      const client = window.__cloudBridge.client;
+      if (!client) return;
+
+      const { data: usersData, error: uErr } = await client.from('festival_users').select('*');
+      if (!uErr && Array.isArray(usersData)) {
+        const map = {};
+        usersData.forEach(row => {
+          map[row.username] = {
+            pin: row.pin,
+            points: row.points ?? 500,
+            unlockedTeams: row.unlocked_teams || ['KIA'],
+            upgrades: row.upgrades || { power: 1, contact: 1, pitch: 1 },
+            stats: row.stats || { hr: 0, wins: 0, hits: 0, atBats: 0 }
+          };
+        });
+        window.__cloudBridge.usersCache = map;
+        if (typeof window.onCloudUsersUpdated === 'function') window.onCloudUsersUpdated(map);
+      }
+
+      const { data: rankData, error: rErr } = await client.from('festival_rankings').select('*');
+      if (!rErr && Array.isArray(rankData)) {
+        window.__cloudBridge.rankingsCache = rankData.map(row => ({
+          username: row.username,
+          team: row.team || 'KIA',
+          hr: row.hr ?? 0,
+          wins: row.wins ?? 0,
+          points: row.points ?? 0
+        }));
+        if (typeof window.onCloudRankingsUpdated === 'function') window.onCloudRankingsUpdated(window.__cloudBridge.rankingsCache);
+      }
+    }
+
+    function updateCloudStatusBadge() {
+      const el = document.getElementById('adminCloudStatus');
+      if (el) el.textContent = window.__cloudBridge.statusText;
+    }
+    window.updateCloudStatusBadge = updateCloudStatusBadge;
+    window.fetchSupabaseAll = fetchSupabaseAll;
+  </script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;900&display=swap" rel="stylesheet" />
   <style>
     * { box-sizing: border-box; font-family: 'Noto Sans KR', sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -40,7 +125,7 @@
             <h1 class="text-sm sm:text-base font-black tracking-tight text-white">2026 KBO 야구 동아리 축제</h1>
             <span class="px-2 py-0.5 text-[10px] font-black rounded-full bg-rose-600 text-white pulse-ring">● LIVE</span>
           </div>
-          <p class="text-[11px] text-slate-400 hidden sm:block">회원가입 · 로그인 · 포인트 선수강화 &amp; 구단영입 · 5단계 하드코어 3D/2D 야구</p>
+          <p class="text-[11px] text-slate-400 hidden sm:block">회원가입 · 로그인 · 포인트 선수강화 &amp; 구단영입 · 5단계 난이도 3D/2D 야구</p>
         </div>
       </div>
 
@@ -56,10 +141,10 @@
       </div>
     </div>
 
-    <!-- 탭 메뉴 -->
+    <!-- 탭 메뉴 (초기 활성 탭: 홈) -->
     <nav class="max-w-7xl mx-auto mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-1">
-      <button class="tab-btn px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800 whitespace-nowrap transition" data-tab="home" onclick="switchTab('home')">🏠 홈</button>
-      <button class="tab-btn active px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800 whitespace-nowrap transition" data-tab="game" onclick="switchTab('game')">⚾ 야구 게임</button>
+      <button class="tab-btn active px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800 whitespace-nowrap transition" data-tab="home" onclick="switchTab('home')">🏠 홈</button>
+      <button class="tab-btn px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800 whitespace-nowrap transition" data-tab="game" onclick="switchTab('game')">⚾ 야구 게임</button>
       <button class="tab-btn px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800 whitespace-nowrap transition" data-tab="upgrade" onclick="switchTab('upgrade')">⚡ 선수강화</button>
       <button class="tab-btn px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800 whitespace-nowrap transition" data-tab="teams" onclick="switchTab('teams')">🏟️ 구단영입</button>
       <button class="tab-btn px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-slate-800 whitespace-nowrap transition" data-tab="ranking" onclick="switchTab('ranking')">🏆 실시간 랭킹</button>
@@ -72,8 +157,8 @@
   <!-- 메인 컨테이너 -->
   <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4">
 
-    <!-- 1. 홈 섹션 -->
-    <section id="sec-home" class="tab-section hidden space-y-4">
+    <!-- 1. 홈 섹션 (기본 첫 화면) -->
+    <section id="sec-home" class="tab-section space-y-4">
       <div class="glass rounded-2xl p-6 bg-gradient-to-br from-slate-900 via-indigo-950/60 to-slate-900 border border-indigo-500/30">
         <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
@@ -83,38 +168,79 @@
               회원가입 후 포인트를 모아 10개 프로야구 구단과 히든 클래식 구단(마리오·소닉)을 영입하고, 배트 파워·컨택·투수 구속을 강화해 교내 랭킹 1위에 도전하세요!
             </p>
           </div>
-          <button onclick="switchTab('game')" class="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-black text-sm shadow-lg whitespace-nowrap">
-            ⚾ 바로 경기 시작하기 →
-          </button>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="switchTab('game')" class="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-black text-sm shadow-lg whitespace-nowrap">
+              ⚾ 바로 경기 시작하기 →
+            </button>
+            <button onclick="openAuthModal('signup')" class="px-4 py-3 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white font-black text-sm shadow-lg whitespace-nowrap">
+              📝 회원가입 (+500 PT)
+            </button>
+          </div>
         </div>
 
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
-          <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5">
+          <div onclick="switchTab('game')" class="cursor-pointer bg-slate-900/80 hover:border-amber-400/50 border border-slate-800 rounded-xl p-3.5 transition">
             <div class="text-xs text-slate-400">난이도 시스템</div>
-            <div class="text-base font-black text-amber-400 mt-1">5단계 하드코어</div>
+            <div class="text-base font-black text-amber-400 mt-1">5단계 난이도</div>
             <div class="text-[11px] text-slate-400 mt-0.5">루키 ~ 레전드 지옥</div>
           </div>
-          <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5">
+          <div onclick="switchTab('game')" class="cursor-pointer bg-slate-900/80 hover:border-emerald-400/50 border border-slate-800 rounded-xl p-3.5 transition">
             <div class="text-xs text-slate-400">경기장 그래픽</div>
             <div class="text-base font-black text-emerald-400 mt-1">2.5D 3D &amp; 2D 전환</div>
             <div class="text-[11px] text-slate-400 mt-0.5">아케이드 하이 앵글 뷰</div>
           </div>
-          <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5">
+          <div onclick="switchTab('teams')" class="cursor-pointer bg-slate-900/80 hover:border-sky-400/50 border border-slate-800 rounded-xl p-3.5 transition">
             <div class="text-xs text-slate-400">영입 가능 구단</div>
             <div class="text-base font-black text-sky-400 mt-1">KBO 10구단 + 히든 2팀</div>
             <div class="text-[11px] text-slate-400 mt-0.5">구단별 고유 팀 컬러 적용</div>
           </div>
-          <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5">
+          <div onclick="switchTab('ranking')" class="cursor-pointer bg-slate-900/80 hover:border-rose-400/50 border border-slate-800 rounded-xl p-3.5 transition">
             <div class="text-xs text-slate-400">동아리 랭킹 보드</div>
-            <div class="text-base font-black text-rose-400 mt-1">실시간 클라우드 동기화</div>
+            <div class="text-base font-black text-rose-400 mt-1">Supabase 실시간 연동</div>
             <div class="text-[11px] text-slate-400 mt-0.5">홈런·승리·포인트 집계</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 빠른 메뉴 카드 -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="glass rounded-2xl p-4 border border-slate-800 flex flex-col justify-between">
+          <div>
+            <div class="text-xs font-extrabold text-amber-400">STEP 01 · 부스 체험</div>
+            <h3 class="text-base font-black text-white mt-1">⚾ 3이닝 풀 매치 야구 게임</h3>
+            <p class="text-xs text-slate-400 mt-1 leading-relaxed">초록불 스윗스팟 타이밍에 맞춰 스윙하고 홈런과 승리를 거둬 포인트를 획득하세요.</p>
+          </div>
+          <button onclick="switchTab('game')" class="mt-3 w-full py-2 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 text-xs font-black">야구 게임 입장 →</button>
+        </div>
+
+        <div class="glass rounded-2xl p-4 border border-slate-800 flex flex-col justify-between">
+          <div>
+            <div class="text-xs font-extrabold text-sky-400">STEP 02 · 육성 &amp; 영입</div>
+            <h3 class="text-base font-black text-white mt-1">⚡ 선수강화 &amp; 구단영입</h3>
+            <p class="text-xs text-slate-400 mt-1 leading-relaxed">모은 포인트로 배트 반발력과 스윗스팟 폭을 강화하고 응원하는 KBO 구단을 영입하세요.</p>
+          </div>
+          <div class="mt-3 grid grid-cols-2 gap-2">
+            <button onclick="switchTab('upgrade')" class="py-2 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-300 text-xs font-black">선수강화</button>
+            <button onclick="switchTab('teams')" class="py-2 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 text-xs font-black">구단영입</button>
+          </div>
+        </div>
+
+        <div class="glass rounded-2xl p-4 border border-slate-800 flex flex-col justify-between">
+          <div>
+            <div class="text-xs font-extrabold text-emerald-400">STEP 03 · 퀴즈 &amp; 랭킹</div>
+            <h3 class="text-base font-black text-white mt-1">🎓 야구 상식 퀴즈 &amp; 명예의 전당</h3>
+            <p class="text-xs text-slate-400 mt-1 leading-relaxed">야구 퀴즈 한 문제당 +120 PT를 즉시 받고 실시간 부스 순위표에 이름을 올리세요!</p>
+          </div>
+          <div class="mt-3 grid grid-cols-2 gap-2">
+            <button onclick="switchTab('quiz')" class="py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-black">퀴즈 풀기</button>
+            <button onclick="switchTab('ranking')" class="py-2 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 text-xs font-black">실시간 랭킹</button>
           </div>
         </div>
       </div>
     </section>
 
     <!-- 2. 야구 게임 섹션 -->
-    <section id="sec-game" class="tab-section space-y-3">
+    <section id="sec-game" class="tab-section hidden space-y-3">
       <!-- 상단 경기 설정 바 -->
       <div class="glass rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2">
         <div class="flex flex-wrap items-center gap-2">
@@ -132,7 +258,7 @@
             <select id="selectDifficulty" onchange="onDifficultyChange()" class="bg-transparent text-xs font-extrabold text-rose-300 focus:outline-none">
               <option value="1" class="bg-slate-900">Lv.1 루키</option>
               <option value="2" class="bg-slate-900">Lv.2 마이너</option>
-              <option value="3" selected class="bg-slate-900">Lv.3 프로 1군</option>
+              <option value="3" selected class="bg-slate-900">Lv.3 프로 1군 (기본)</option>
               <option value="4" class="bg-slate-900">Lv.4 올스타</option>
               <option value="5" class="bg-slate-900">Lv.5 레전드 지옥</option>
             </select>
@@ -210,6 +336,18 @@
             <div id="bannerSub" class="text-xs sm:text-sm text-slate-200 font-bold mt-1">완벽한 배럴 스윗스팟!</div>
           </div>
         </div>
+
+        <!-- 하단 실시간 투구 타이밍 & 스윗스팟 게이지 -->
+        <div id="timingMeterWrap" class="hidden absolute bottom-3 left-1/2 -translate-x-1/2 w-64 sm:w-80 glass px-3 py-2 rounded-xl border border-slate-700/90 pointer-events-none z-10">
+          <div class="flex justify-between text-[10px] font-extrabold text-slate-300 mb-1">
+            <span>투구 궤적</span>
+            <span id="timingMeterLabel" class="text-emerald-400">초록 구간에서 SWING!</span>
+          </div>
+          <div class="relative w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+            <div id="timingSweetZone" class="absolute top-0 bottom-0 bg-emerald-500/45 border-x border-emerald-400"></div>
+            <div id="timingCursor" class="absolute top-0 bottom-0 w-2 bg-amber-300 rounded-full shadow-[0_0_8px_#fde047]" style="left: 0%"></div>
+          </div>
+        </div>
       </div>
 
       <!-- 중계석 캐스터 바 -->
@@ -254,7 +392,7 @@
           <div class="text-sm font-black text-white">🔥 강속 직구 [1]</div>
           <div class="text-[11px] text-rose-100">정면 승부 포심 패스트볼</div>
         </button>
-        <button onclick="throwUserPitch('break')" class="py-3 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-left shadow-lg">
+        <button onclick="throwUserPitch('break')" class="py-3 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-600 text-left shadow-lg">
           <div class="text-sm font-black text-white">🌀 고속 변화구 [2]</div>
           <div class="text-[11px] text-emerald-100">슬라이더/포크 헛스윙 유도</div>
         </button>
@@ -266,9 +404,8 @@
           <div class="text-sm font-black text-white">⚡ 마구 결정구 (<span id="specialPitchCount">3</span>/3)</div>
           <div class="text-[11px] text-purple-100">초고속 위닝샷 결정구</div>
         </button>
-        <div class="col-span-2 sm:col-span-1 grid grid-cols-2 gap-1.5">
-          <button onclick="useBullpen()" class="rounded-xl bg-sky-900/70 hover:bg-sky-800 text-xs font-bold text-sky-200 border border-sky-700/60">💧 불펜교체</button>
-          <button onclick="resetMatch()" class="rounded-xl bg-rose-950/70 hover:bg-rose-900 text-xs font-bold text-rose-300 border border-rose-700/50">🔄 리셋</button>
+        <div class="col-span-2 sm:col-span-1 grid grid-cols-1 gap-1.5">
+          <button onclick="useBullpen()" class="rounded-xl bg-sky-900/70 hover:bg-sky-800 text-xs font-bold text-sky-200 border border-sky-700/60">💧 불펜 투수 교체</button>
         </div>
       </div>
     </section>
@@ -279,7 +416,7 @@
         <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
           <div>
             <h2 class="text-xl font-black text-white">⚡ 선수 트레이닝 &amp; 장비 강화</h2>
-            <p class="text-xs text-slate-400 mt-0.5">경기·퀴즈로 획득한 포인트를 사용해 하드코어 난이도를 공략하세요!</p>
+            <p class="text-xs text-slate-400 mt-0.5">경기·퀴즈로 획득한 포인트를 사용해 스윗스팟과 장타력을 끌어올리세요!</p>
           </div>
           <div class="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-300 text-sm font-black">
             보유 포인트: <span id="upgradePointsDisplay">450</span> PT
@@ -311,7 +448,7 @@
         <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
           <div>
             <h2 class="text-xl font-black text-white">🏆 2026 KBO 동아리 축제 실시간 랭킹</h2>
-            <p class="text-xs text-slate-400 mt-0.5">로그인한 부원의 홈런·승리·포인트가 실시간으로 집계됩니다.</p>
+            <p class="text-xs text-slate-400 mt-0.5">로그인한 부원의 홈런·승리·포인트가 Supabase 클라우드로 실시간 집계됩니다.</p>
           </div>
           <button onclick="syncCloudRankings(true)" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white">🔄 랭킹 새로고침</button>
         </div>
@@ -370,12 +507,12 @@
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
           <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800">
-            <div class="text-xs text-slate-400">가입된 전체 부원 수</div>
-            <div id="adminTotalUsers" class="text-2xl font-black text-amber-300 mt-1">0명</div>
+            <div class="text-xs text-slate-400">Supabase 서버 연동 상태</div>
+            <div id="adminCloudStatus" class="text-xs font-black text-amber-300 mt-1.5">🟡 연결 확인 중...</div>
           </div>
           <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800">
-            <div class="text-xs text-slate-400">현재 로그인 운영진</div>
-            <div id="adminCurrentName" class="text-2xl font-black text-rose-400 mt-1">-</div>
+            <div class="text-xs text-slate-400">가입된 전체 부원 수 / 운영진</div>
+            <div class="text-lg font-black text-rose-400 mt-1"><span id="adminTotalUsers">0명</span> · <span id="adminCurrentName">-</span></div>
           </div>
           <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800">
             <div class="text-xs text-slate-400">내 계정 즉시 포인트 충전</div>
@@ -402,40 +539,79 @@
     </section>
   </main>
 
-  <!-- 로그인 / 회원가입 모달 -->
-  <div id="authModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="glass rounded-2xl max-w-sm w-full p-5 border border-slate-700 shadow-2xl">
-      <div class="flex items-center justify-between mb-3">
-        <h3 id="authModalTitle" class="text-lg font-black text-white">🔑 부원 로그인</h3>
-        <button onclick="closeAuthModal()" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
-      </div>
-      <div class="space-y-3">
-        <div>
-          <label class="block text-xs text-slate-400 font-bold mb-1">닉네임 / 아이디</label>
-          <input id="authUsername" type="text" placeholder="예: 야구왕김철수" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-amber-400" />
-        </div>
-        <div>
-          <label class="block text-xs text-slate-400 font-bold mb-1">비밀번호 (숫자 또는 문자)</label>
-          <input id="authPin" type="password" placeholder="비밀번호 입력" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-amber-400" />
-        </div>
-        <p id="authMsg" class="text-xs font-bold text-amber-300 min-h-[18px]"></p>
-        <button id="authSubmitBtn" onclick="submitAuthForm()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white text-sm font-black shadow-lg">로그인하기</button>
-        <div class="text-center">
-          <button id="authSwitchModeBtn" onclick="toggleAuthMode()" class="text-xs text-sky-400 hover:underline font-bold">계정이 없으신가요? 회원가입하기 →</button>
-        </div>
+  <!-- 커스텀 알림/확인 모달 -->
+  <div id="customDialogModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-sm w-full p-5 border border-slate-700 shadow-2xl text-center space-y-4">
+      <p id="customDialogMsg" class="text-sm font-bold text-white leading-relaxed"></p>
+      <div class="flex justify-center gap-2">
+        <button id="customDialogCancelBtn" onclick="closeCustomDialog(false)" class="hidden px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-bold text-slate-200">취소</button>
+        <button id="customDialogOkBtn" onclick="closeCustomDialog(true)" class="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-xs font-black text-white">확인</button>
       </div>
     </div>
   </div>
 
-  <script>
-    // ================= 0. 전역 상수 & 저장소 설정 =================
-    const STORAGE_KEYS = {
-      usersDb: 'kbo_festival_2026_users_v11',
-      rankingsDb: 'kbo_festival_2026_rankings_v11',
-      currentUser: 'kbo_festival_2026_current_user_v11'
-    };
+  <!-- 로그인 / 회원가입 모달 -->
+  <div id="authModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-sm w-full p-6 border border-slate-700 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 id="authModalTitle" class="text-lg font-black text-white">🔑 로그인</h3>
+        <button onclick="closeAuthModal()" class="text-slate-400 hover:text-white text-sm font-bold">✕</button>
+      </div>
+      <div class="flex gap-1.5 bg-slate-900 p-1 rounded-xl">
+        <button id="tabAuthLogin" onclick="setAuthMode('login')" class="flex-1 py-1.5 rounded-lg bg-sky-600 text-white text-xs font-black">로그인</button>
+        <button id="tabAuthSignup" onclick="setAuthMode('signup')" class="flex-1 py-1.5 rounded-lg text-slate-400 text-xs font-black">회원가입 (+500PT)</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">아이디 (닉네임)</label>
+          <input id="authUsername" type="text" placeholder="예: 사직거포" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-amber-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">비밀번호 (PIN)</label>
+          <input id="authPin" type="password" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter') submitAuthForm()" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-amber-400" />
+        </div>
+      </div>
+      <p id="authMsg" class="text-xs font-bold text-amber-300 min-h-[18px]"></p>
+      <button onclick="submitAuthForm()" id="authSubmitBtn" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white text-sm font-black shadow-lg">
+        입장하기
+      </button>
+    </div>
+  </div>
 
-    // 운영진 계정 (Han0724 / 477012, 갸팬 / 7546) - 얼굴인식 없이 즉시 로그인
+  <script>
+    // ================= 0. 전역 상수 & 메모리/Supabase 저장소 설정 =================
+    const memoryUsersDb = {};
+    let memoryRankingsDb = [
+      { username: '사직거포이대호', team: 'LOTTE', hr: 7, wins: 5, points: 1420 },
+      { username: '무등산호랑이', team: 'KIA', hr: 5, wins: 4, points: 1180 },
+      { username: '잠실스피드스터', team: 'LG', hr: 4, wins: 3, points: 960 },
+      { username: '대구라이온킹', team: 'SAMSUNG', hr: 3, wins: 2, points: 810 }
+    ];
+    let currentSessionUsername = null;
+
+    let dialogResolveFn = null;
+    function showCustomAlert(message) {
+      document.getElementById('customDialogMsg').textContent = message;
+      document.getElementById('customDialogCancelBtn').classList.add('hidden');
+      document.getElementById('customDialogModal').classList.remove('hidden');
+      return new Promise((resolve) => { dialogResolveFn = resolve; });
+    }
+    function showCustomConfirm(message) {
+      document.getElementById('customDialogMsg').textContent = message;
+      document.getElementById('customDialogCancelBtn').classList.remove('hidden');
+      document.getElementById('customDialogModal').classList.remove('hidden');
+      return new Promise((resolve) => { dialogResolveFn = resolve; });
+    }
+    function closeCustomDialog(result) {
+      document.getElementById('customDialogModal').classList.add('hidden');
+      if (dialogResolveFn) {
+        const fn = dialogResolveFn;
+        dialogResolveFn = null;
+        fn(result);
+      }
+    }
+
+    // 운영진 계정 (Han0724 / 477012, 갸팬 / 7546)
     const ADMIN_CREDENTIALS = {
       'Han0724': '477012',
       '갸팬': '7546'
@@ -463,42 +639,42 @@
 
     const DEFAULT_UNLOCKED_TEAMS = ['KIA'];
 
-    // ================= 0-B. 5단계 하드코어 난이도 밸런스 프리셋 =================
+    // ================= 0-B. 5단계 난이도 밸런스 프리셋 (긴장감 있는 프로야구 밸런스) =================
     const LEVEL_CONFIGS = {
       1: {
         level: 1, label: 'Lv.1 루키', shortLabel: 'Lv.1 루키',
-        fastSpeed: 152, fastDur: 0.98, breakSpeed: 136, breakDur: 1.08, ballSpeed: 140, ballDur: 1.04,
-        curveScale: 1.25, zoneMin: 0.83, zoneMax: 0.97,
-        hrDiff: 0.012, hrProb: 0.16, xbhDiff: 0.028, xbhProb: 0.30, hitDiff: 0.055, hitProb: 0.42,
-        cpuHitBoost: 0.08, clashMult: 1.2
+        fastSpeed: 118, fastDur: 1.42, breakSpeed: 106, breakDur: 1.54, ballSpeed: 110, ballDur: 1.48,
+        curveScale: 0.45, zoneMin: 0.64, zoneMax: 1.06,
+        hrDiff: 0.065, hrProb: 0.55, xbhDiff: 0.105, xbhProb: 0.68, hitDiff: 0.18, hitProb: 0.80,
+        cpuHitBoost: 0.08, clashMult: 1.1
       },
       2: {
         level: 2, label: 'Lv.2 마이너', shortLabel: 'Lv.2 마이너',
-        fastSpeed: 160, fastDur: 0.86, breakSpeed: 144, breakDur: 0.96, ballSpeed: 148, ballDur: 0.92,
-        curveScale: 1.55, zoneMin: 0.85, zoneMax: 0.95,
-        hrDiff: 0.008, hrProb: 0.12, xbhDiff: 0.020, xbhProb: 0.24, hitDiff: 0.042, hitProb: 0.34,
-        cpuHitBoost: 0.14, clashMult: 1.4
+        fastSpeed: 132, fastDur: 1.24, breakSpeed: 120, breakDur: 1.35, ballSpeed: 124, ballDur: 1.30,
+        curveScale: 0.72, zoneMin: 0.70, zoneMax: 1.03,
+        hrDiff: 0.048, hrProb: 0.44, xbhDiff: 0.08, xbhProb: 0.56, hitDiff: 0.145, hitProb: 0.68,
+        cpuHitBoost: 0.13, clashMult: 1.3
       },
       3: {
         level: 3, label: 'Lv.3 프로 1군', shortLabel: 'Lv.3 프로',
-        fastSpeed: 168, fastDur: 0.76, breakSpeed: 151, breakDur: 0.85, ballSpeed: 155, ballDur: 0.82,
-        curveScale: 1.85, zoneMin: 0.865, zoneMax: 0.935,
-        hrDiff: 0.0055, hrProb: 0.09, xbhDiff: 0.014, xbhProb: 0.19, hitDiff: 0.030, hitProb: 0.28,
-        cpuHitBoost: 0.20, clashMult: 1.7
+        fastSpeed: 148, fastDur: 1.02, breakSpeed: 135, breakDur: 1.12, ballSpeed: 139, ballDur: 1.07,
+        curveScale: 1.02, zoneMin: 0.75, zoneMax: 1.01,
+        hrDiff: 0.036, hrProb: 0.34, xbhDiff: 0.062, xbhProb: 0.46, hitDiff: 0.115, hitProb: 0.58,
+        cpuHitBoost: 0.18, clashMult: 1.6
       },
       4: {
         level: 4, label: 'Lv.4 올스타', shortLabel: 'Lv.4 올스타',
-        fastSpeed: 175, fastDur: 0.66, breakSpeed: 158, breakDur: 0.75, ballSpeed: 162, ballDur: 0.72,
-        curveScale: 2.15, zoneMin: 0.875, zoneMax: 0.925,
-        hrDiff: 0.0038, hrProb: 0.065, xbhDiff: 0.010, xbhProb: 0.15, hitDiff: 0.022, hitProb: 0.22,
-        cpuHitBoost: 0.26, clashMult: 2.0
+        fastSpeed: 158, fastDur: 0.88, breakSpeed: 144, breakDur: 0.98, ballSpeed: 148, ballDur: 0.93,
+        curveScale: 1.32, zoneMin: 0.79, zoneMax: 0.99,
+        hrDiff: 0.026, hrProb: 0.26, xbhDiff: 0.048, xbhProb: 0.38, hitDiff: 0.09, hitProb: 0.48,
+        cpuHitBoost: 0.24, clashMult: 1.9
       },
       5: {
         level: 5, label: 'Lv.5 레전드 지옥', shortLabel: 'Lv.5 지옥',
-        fastSpeed: 182, fastDur: 0.56, breakSpeed: 165, breakDur: 0.65, ballSpeed: 168, ballDur: 0.62,
-        curveScale: 2.50, zoneMin: 0.885, zoneMax: 0.915,
-        hrDiff: 0.0025, hrProb: 0.045, xbhDiff: 0.0065, xbhProb: 0.11, hitDiff: 0.015, hitProb: 0.17,
-        cpuHitBoost: 0.32, clashMult: 2.6
+        fastSpeed: 168, fastDur: 0.76, breakSpeed: 153, breakDur: 0.85, ballSpeed: 157, ballDur: 0.81,
+        curveScale: 1.60, zoneMin: 0.82, zoneMax: 0.98,
+        hrDiff: 0.018, hrProb: 0.20, xbhDiff: 0.035, xbhProb: 0.30, hitDiff: 0.072, hitProb: 0.40,
+        cpuHitBoost: 0.30, clashMult: 2.3
       }
     };
 
@@ -519,35 +695,33 @@
       homeTeam: 'KIA',
       awayTeam: 'SAMSUNG',
       difficulty: 3,
-      viewMode: '3d', // '3d' (2.5D 직교 아케이드) | '2d' (클래식 탑뷰)
+      viewMode: '3d',
       casterStyle: 'busan',
       autoOffense: false,
       paused: false,
       inning: 1,
-      isTop: true, // true: 1P 공격(초), false: 1P 수비(말)
+      isTop: true,
       homeScore: 0,
       awayScore: 0,
       balls: 0,
       strikes: 0,
       outs: 0,
-      bases: [false, false, false], // 1루, 2루, 3루
+      bases: [false, false, false],
       stamina: 100,
       bullpenLeft: 4,
       specialPitchLeft: 3,
-      // 투구/타구 애니메이션 상태
-      pitchState: 'idle', // 'idle' | 'windup' | 'pitching' | 'hit_flight' | 'result_delay'
+      pitchState: 'idle',
       pitchTimer: 0,
-      pitchDuration: 0.76,
+      pitchDuration: 1.02,
       pitchProgress: 0,
       pitchType: 'fast',
-      pitchSpeedKmh: 168,
+      pitchSpeedKmh: 148,
       curveOffset: 0,
       swingAnimTimer: 0,
       cpuSwingScheduled: false,
       autoOffenseSwingScheduled: false,
-      // 타구 비행 상태
-      ballPos: { x: 0, y: 1.5, z: -18.4 },
-      hitStart: { x: 0, y: 1.1, z: 0 },
+      ballPos: { x: 0, y: 1.8, z: -18.4 },
+      hitStart: { x: 0, y: 1.2, z: 0 },
       hitTarget: { x: 0, y: 0, z: -50 },
       hitMaxHeight: 10,
       hitFlightTime: 0,
@@ -555,7 +729,7 @@
       pendingHitResult: null
     };
 
-    // ================= 2. 사운드 이펙트 (Web Audio API) =================
+    // ================= 2. 사운드 이펙트 =================
     let audioCtx = null;
     function ensureAudio() {
       if (!audioCtx) {
@@ -573,13 +747,13 @@
         const gain = audioCtx.createGain();
         osc.type = isHr ? 'triangle' : 'square';
         osc.frequency.setValueAtTime(isHr ? 520 : 340, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(90, audioCtx.currentTime + (isHr ? 0.25 : 0.12));
-        gain.gain.setValueAtTime(0.28, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (isHr ? 0.26 : 0.13));
+        osc.frequency.exponentialRampToValueAtTime(90, audioCtx.currentTime + 0.16);
+        gain.gain.setValueAtTime(0.22, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start();
-        osc.stop(audioCtx.currentTime + (isHr ? 0.27 : 0.14));
+        osc.stop(audioCtx.currentTime + 0.19);
       } catch (e) {}
     }
 
@@ -592,98 +766,130 @@
         osc.type = 'sine';
         osc.frequency.setValueAtTime(isStrike ? 220 : 440, audioCtx.currentTime);
         gain.gain.setValueAtTime(0.14, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.14);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.16);
+        osc.stop(audioCtx.currentTime + 0.15);
       } catch (e) {}
     }
 
-    // ================= 3. 회원 & 랭킹 데이터 관리 =================
+    // ================= 3. 회원 & 랭킹 데이터 관리 (Supabase 실시간 동기화) =================
     function getUsersDatabase() {
-      try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEYS.usersDb)) || {};
-      } catch (e) {
-        return {};
+      const bridge = window.__cloudBridge;
+      if (bridge && bridge.ready && Object.keys(bridge.usersCache).length > 0) {
+        return { ...memoryUsersDb, ...bridge.usersCache };
       }
-    }
-
-    function saveUsersDatabase(db) {
-      localStorage.setItem(STORAGE_KEYS.usersDb, JSON.stringify(db));
+      return { ...memoryUsersDb };
     }
 
     function getRankingsDatabase() {
-      try {
-        const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.rankingsDb));
-        if (Array.isArray(list) && list.length > 0) return list;
-      } catch (e) {}
-      const seed = [
-        { username: '사직거포이대호', team: 'LOTTE', hr: 7, wins: 5, points: 1420 },
-        { username: '무등산호랑이', team: 'KIA', hr: 5, wins: 4, points: 1180 },
-        { username: '잠실스피드스터', team: 'LG', hr: 4, wins: 3, points: 960 },
-        { username: '대구라이온킹', team: 'SAMSUNG', hr: 3, wins: 2, points: 810 }
-      ];
-      localStorage.setItem(STORAGE_KEYS.rankingsDb, JSON.stringify(seed));
-      return seed;
+      const bridge = window.__cloudBridge;
+      if (bridge && bridge.ready && bridge.rankingsCache.length > 0) {
+        return [...bridge.rankingsCache];
+      }
+      return [...memoryRankingsDb];
     }
 
-    function saveRankingsDatabase(list) {
-      localStorage.setItem(STORAGE_KEYS.rankingsDb, JSON.stringify(list));
+    async function saveUserRecordToCloud(username, record) {
+      memoryUsersDb[username] = record;
+      const bridge = window.__cloudBridge;
+      if (bridge && bridge.ready && bridge.client) {
+        await bridge.client.from('festival_users').upsert({
+          username,
+          pin: record.pin,
+          points: record.points,
+          unlocked_teams: record.unlockedTeams,
+          upgrades: record.upgrades,
+          stats: record.stats
+        });
+      }
     }
 
-    function persistCurrentAccount() {
-      if (!game.account.username) return;
+    async function saveRankingEntryToCloud(entry) {
+      const idx = memoryRankingsDb.findIndex(r => r.username === entry.username);
+      if (idx >= 0) memoryRankingsDb[idx] = entry;
+      else memoryRankingsDb.push(entry);
+
+      const bridge = window.__cloudBridge;
+      if (bridge && bridge.ready && bridge.client) {
+        await bridge.client.from('festival_rankings').upsert({
+          username: entry.username,
+          team: entry.team,
+          hr: entry.hr,
+          wins: entry.wins,
+          points: entry.points
+        });
+      }
+    }
+
+    async function persistCurrentAccount() {
+      const u = game.account.username;
+      if (!u) return;
+
       if (!game.account.isAdmin) {
         const db = getUsersDatabase();
-        if (db[game.account.username]) {
-          db[game.account.username].points = game.account.points;
-          db[game.account.username].unlockedTeams = game.account.unlockedTeams;
-          db[game.account.username].upgrades = game.account.upgrades;
-          db[game.account.username].stats = game.account.stats;
-          saveUsersDatabase(db);
-        }
+        const existing = db[u] || {};
+        const updatedRecord = {
+          pin: existing.pin || '',
+          points: game.account.points,
+          unlockedTeams: [...game.account.unlockedTeams],
+          upgrades: { ...game.account.upgrades },
+          stats: { ...game.account.stats }
+        };
+        await saveUserRecordToCloud(u, updatedRecord);
+
+        await saveRankingEntryToCloud({
+          username: u,
+          team: game.homeTeam,
+          hr: game.account.stats.hr || 0,
+          wins: game.account.stats.wins || 0,
+          points: game.account.points || 0
+        });
       }
-      // 랭킹 보드 업데이트
-      const ranks = getRankingsDatabase();
-      const idx = ranks.findIndex(r => r.username === game.account.username);
-      const entry = {
-        username: game.account.username,
-        team: game.homeTeam,
-        hr: game.account.stats.hr || 0,
-        wins: game.account.stats.wins || 0,
-        points: game.account.points
-      };
-      if (idx >= 0) ranks[idx] = entry;
-      else ranks.push(entry);
-      saveRankingsDatabase(ranks);
-      renderRankingsTable();
     }
 
-    function addPoints(amount) {
-      game.account.points = Math.max(0, game.account.points + amount);
+    window.onCloudUsersUpdated = (map) => {
+      if (currentSessionUsername && !game.account.isAdmin && map[currentSessionUsername]) {
+        const latest = map[currentSessionUsername];
+        game.account.points = latest.points ?? game.account.points;
+        game.account.unlockedTeams = latest.unlockedTeams || game.account.unlockedTeams;
+        game.account.upgrades = latest.upgrades || game.account.upgrades;
+        updateAccountPointsUI();
+        populateTeamSelectors();
+        renderTeamsGrid();
+        renderUpgradeShop();
+      }
+      if (game.account.isAdmin) renderAdminDashboard();
+    };
+
+    window.onCloudRankingsUpdated = () => {
+      renderRankingsTable();
+    };
+
+    function updateAccountPointsUI() {
+      const pt = game.account.points;
+      const hEl = document.getElementById('headerPoints');
+      const uEl = document.getElementById('upgradePointsDisplay');
+      const tEl = document.getElementById('teamsPointsDisplay');
+      if (hEl) hEl.textContent = pt;
+      if (uEl) uEl.textContent = pt;
+      if (tEl) tEl.textContent = pt;
+    }
+
+    function addPoints(delta) {
+      game.account.points = Math.max(0, (game.account.points || 0) + delta);
       updateAccountPointsUI();
       persistCurrentAccount();
     }
 
-    function updateAccountPointsUI() {
-      const pt = game.account.points;
-      document.getElementById('headerPoints').textContent = pt;
-      const upgEl = document.getElementById('upgradePointsDisplay');
-      const teamEl = document.getElementById('teamsPointsDisplay');
-      if (upgEl) upgEl.textContent = pt;
-      if (teamEl) teamEl.textContent = pt;
-    }
-
-    // ================= 4. 로그인 / 회원가입 (얼굴인식 제거, 즉시 로그인) =================
+    // ================= 4. 로그인 / 회원가입 모달 컨트롤 =================
     let authMode = 'login';
-
     function openAuthModal(mode = 'login') {
-      authMode = mode;
+      setAuthMode(mode);
       document.getElementById('authUsername').value = '';
       document.getElementById('authPin').value = '';
       document.getElementById('authMsg').textContent = '';
-      syncAuthModalLabels();
       document.getElementById('authModal').classList.remove('hidden');
     }
 
@@ -691,43 +897,46 @@
       document.getElementById('authModal').classList.add('hidden');
     }
 
-    function toggleAuthMode() {
-      authMode = authMode === 'login' ? 'signup' : 'login';
-      document.getElementById('authMsg').textContent = '';
-      syncAuthModalLabels();
-    }
-
-    function syncAuthModalLabels() {
-      const isLogin = authMode === 'login';
-      document.getElementById('authModalTitle').textContent = isLogin ? '🔑 부원 로그인' : '📝 동아리 부원 회원가입';
+    function setAuthMode(mode) {
+      authMode = mode;
+      const isLogin = mode === 'login';
+      document.getElementById('authModalTitle').textContent = isLogin ? '🔑 로그인' : '📝 회원가입';
       document.getElementById('authSubmitBtn').textContent = isLogin ? '로그인하기' : '가입하고 500 PT 받기';
-      document.getElementById('authSwitchModeBtn').textContent = isLogin ? '계정이 없으신가요? 회원가입하기 →' : '이미 계정이 있나요? 로그인하기 →';
+      document.getElementById('tabAuthLogin').className = isLogin
+        ? 'flex-1 py-1.5 rounded-lg bg-sky-600 text-white text-xs font-black'
+        : 'flex-1 py-1.5 rounded-lg text-slate-400 text-xs font-black';
+      document.getElementById('tabAuthSignup').className = !isLogin
+        ? 'flex-1 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-black'
+        : 'flex-1 py-1.5 rounded-lg text-slate-400 text-xs font-black';
     }
 
     function activateAdminSession(username) {
-      game.account.username = username;
-      game.account.isAdmin = true;
-      game.account.points = 99999;
-      game.account.unlockedTeams = TEAMS_DATA.map(t => t.id);
-      game.account.upgrades = { power: 5, contact: 5, pitch: 5 };
-      document.getElementById('tabAdminBtn').classList.remove('hidden');
-      document.getElementById('headerUserBadge').textContent = `👑 운영진 ${username}`;
-      document.getElementById('headerUserBadge').classList.remove('hidden');
+      game.account = {
+        username,
+        isAdmin: true,
+        points: 99999,
+        unlockedTeams: TEAMS_DATA.map(t => t.id),
+        upgrades: { power: 5, contact: 5, pitch: 5 },
+        stats: { hr: 10, wins: 10, hits: 30, atBats: 40 }
+      };
+      applyLoggedInUserUI(username, true);
+    }
+
+    function applyLoggedInUserUI(username, isAdmin = false) {
+      const badge = document.getElementById('headerUserBadge');
+      badge.textContent = isAdmin ? `👑 ${username} (운영진)` : `⚾ ${username}`;
+      badge.classList.remove('hidden');
       document.getElementById('btnOpenLogin').classList.add('hidden');
       document.getElementById('btnOpenSignup').classList.add('hidden');
       document.getElementById('btnLogout').classList.remove('hidden');
+      if (isAdmin) {
+        document.getElementById('tabAdminBtn').classList.remove('hidden');
+      } else {
+        document.getElementById('tabAdminBtn').classList.add('hidden');
+      }
     }
 
-    function applyLoggedInUserUI(username) {
-      document.getElementById('headerUserBadge').textContent = `⚾ ${username}`;
-      document.getElementById('headerUserBadge').classList.remove('hidden');
-      document.getElementById('btnOpenLogin').classList.add('hidden');
-      document.getElementById('btnOpenSignup').classList.add('hidden');
-      document.getElementById('btnLogout').classList.remove('hidden');
-      document.getElementById('tabAdminBtn').classList.add('hidden');
-    }
-
-    function submitAuthForm() {
+    async function submitAuthForm() {
       const username = document.getElementById('authUsername').value.trim();
       const pin = document.getElementById('authPin').value.trim();
       const msg = document.getElementById('authMsg');
@@ -737,14 +946,14 @@
         return;
       }
 
-      // 운영진 계정 즉시 인증 (Han0724 / 477012, 갸팬 / 7546)
       if (isAdminCredential(username, pin)) {
         activateAdminSession(username);
-        localStorage.setItem(STORAGE_KEYS.currentUser, username);
+        currentSessionUsername = username;
         updateAccountPointsUI();
         populateTeamSelectors();
         renderTeamsGrid();
         renderUpgradeShop();
+        if (window.__cloudBridge && window.__cloudBridge.ready) await fetchSupabaseAll();
         renderAdminDashboard();
         if (renderer) syncTeamColorsOnField();
         msg.textContent = `👑 운영진 [${username}] 로그인 성공! 관리실로 이동합니다.`;
@@ -756,7 +965,24 @@
         return;
       }
 
-      const db = getUsersDatabase();
+      let db = getUsersDatabase();
+      const bridge = window.__cloudBridge;
+      if (bridge && bridge.ready && bridge.client) {
+        try {
+          const { data } = await bridge.client.from('festival_users').select('*').eq('username', username).maybeSingle();
+          if (data) {
+            const rec = {
+              pin: data.pin,
+              points: data.points ?? 500,
+              unlockedTeams: data.unlocked_teams || ['KIA'],
+              upgrades: data.upgrades || { power: 1, contact: 1, pitch: 1 },
+              stats: data.stats || { hr: 0, wins: 0, hits: 0, atBats: 0 }
+            };
+            db[username] = rec;
+            memoryUsersDb[username] = rec;
+          }
+        } catch (e) {}
+      }
 
       if (authMode === 'signup') {
         if (Object.prototype.hasOwnProperty.call(ADMIN_CREDENTIALS, username)) {
@@ -767,15 +993,15 @@
           msg.textContent = '⚠️ 이미 등록된 아이디입니다. 로그인으로 전환해 주세요.';
           return;
         }
-        db[username] = {
+        const newRecord = {
           pin,
           points: 500,
           unlockedTeams: [...DEFAULT_UNLOCKED_TEAMS],
           upgrades: { power: 1, contact: 1, pitch: 1 },
           stats: { hr: 0, wins: 0, hits: 0, atBats: 0 }
         };
-        saveUsersDatabase(db);
-        loginAsMember(username, db[username]);
+        await saveUserRecordToCloud(username, newRecord);
+        loginAsMember(username, newRecord);
         msg.textContent = '🎉 가입 완료! 축하금 500 PT가 지급되었습니다!';
         setTimeout(() => closeAuthModal(), 400);
       } else {
@@ -799,7 +1025,7 @@
         upgrades: record.upgrades ? { ...record.upgrades } : { power: 1, contact: 1, pitch: 1 },
         stats: record.stats ? { ...record.stats } : { hr: 0, wins: 0, hits: 0, atBats: 0 }
       };
-      localStorage.setItem(STORAGE_KEYS.currentUser, username);
+      currentSessionUsername = username;
       applyLoggedInUserUI(username);
       updateAccountPointsUI();
       populateTeamSelectors();
@@ -810,7 +1036,7 @@
     }
 
     function logoutUser() {
-      localStorage.removeItem(STORAGE_KEYS.currentUser);
+      currentSessionUsername = null;
       game.account = {
         username: null,
         isAdmin: false,
@@ -830,20 +1056,19 @@
       renderTeamsGrid();
       renderUpgradeShop();
       if (renderer) syncTeamColorsOnField();
-      switchTab('game');
+      switchTab('home');
     }
 
     function restoreSavedSession() {
-      const savedUser = localStorage.getItem(STORAGE_KEYS.currentUser);
-      if (!savedUser) return;
-      if (Object.prototype.hasOwnProperty.call(ADMIN_CREDENTIALS, savedUser)) {
-        activateAdminSession(savedUser);
+      if (!currentSessionUsername) return;
+      if (Object.prototype.hasOwnProperty.call(ADMIN_CREDENTIALS, currentSessionUsername)) {
+        activateAdminSession(currentSessionUsername);
         updateAccountPointsUI();
         return;
       }
       const db = getUsersDatabase();
-      if (db[savedUser]) {
-        loginAsMember(savedUser, db[savedUser]);
+      if (db[currentSessionUsername]) {
+        loginAsMember(currentSessionUsername, db[currentSessionUsername]);
       }
     }
 
@@ -988,7 +1213,6 @@
       document.getElementById('bullpenCount').textContent = game.bullpenLeft;
       document.getElementById('specialPitchCount').textContent = game.specialPitchLeft;
 
-      // 공수 컨트롤 전환
       if (isUserBatting()) {
         document.getElementById('offenseControls').classList.remove('hidden');
         document.getElementById('defenseControls').classList.add('hidden');
@@ -1002,9 +1226,17 @@
       return game.isTop;
     }
 
-    // ================= 6. 하드코어 야구 게임 규칙 & 타격 엔진 =================
+    // ================= 6. 야구 게임 규칙 & 타격 엔진 =================
     function startNextPitch(forcedType = null) {
       if (game.paused) return;
+      if (!isUserBatting() && !forcedType) {
+        game.pitchState = 'waiting_user_pitch';
+        game.ballPos = { x: 0, y: 1.8, z: -18.4 };
+        document.getElementById('hudPitchInfo').textContent = '구종을 선택해 투구하세요!';
+        setCasterMessage('수비 차례입니다! 아래 구종 버튼(1~4번)을 눌러 직접 투구하세요!');
+        return;
+      }
+
       const cfg = getLevelCfg();
       game.pitchState = 'windup';
       game.pitchTimer = 0;
@@ -1012,22 +1244,22 @@
       game.cpuSwingScheduled = false;
       game.autoOffenseSwingScheduled = false;
 
-      const pitchUpgradeBonus = ((game.account.upgrades.pitch || 1) - 1) * 2;
-      const types = ['fast', 'break', 'ball'];
-      const chosen = forcedType || types[Math.floor(Math.random() * types.length)];
+      const pitchUpgradeBonus = ((game.account.upgrades.pitch || 1) - 1) * 3;
+      const pool = ['fast', 'fast', 'break', 'ball'];
+      const chosen = forcedType || pool[Math.floor(Math.random() * pool.length)];
       game.pitchType = chosen;
 
       if (chosen === 'fast') {
         game.pitchSpeedKmh = cfg.fastSpeed + (isUserBatting() ? 0 : pitchUpgradeBonus);
         game.pitchDuration = cfg.fastDur;
-        game.curveOffset = (Math.random() - 0.5) * 0.25;
+        game.curveOffset = (Math.random() - 0.5) * 0.35;
       } else if (chosen === 'break') {
         game.pitchSpeedKmh = cfg.breakSpeed + (isUserBatting() ? 0 : pitchUpgradeBonus);
         game.pitchDuration = cfg.breakDur;
-        game.curveOffset = (Math.random() < 0.5 ? -1 : 1) * (0.95 * cfg.curveScale);
+        game.curveOffset = (Math.random() < 0.5 ? -1 : 1) * (1.05 * cfg.curveScale);
       } else if (chosen === 'special') {
-        game.pitchSpeedKmh = cfg.fastSpeed + 8 + pitchUpgradeBonus;
-        game.pitchDuration = Math.max(0.48, cfg.fastDur - 0.12);
+        game.pitchSpeedKmh = cfg.fastSpeed + 9 + pitchUpgradeBonus;
+        game.pitchDuration = Math.max(0.62, cfg.fastDur - 0.11);
         game.curveOffset = (Math.random() < 0.5 ? -1 : 1) * (1.25 * cfg.curveScale);
       } else {
         game.pitchSpeedKmh = cfg.ballSpeed;
@@ -1035,7 +1267,7 @@
         game.curveOffset = (Math.random() < 0.5 ? -1 : 1) * (1.35 * cfg.curveScale);
       }
 
-      const typeLabel = chosen === 'fast' ? '강속 직구' : chosen === 'break' ? '고속 슬라이더/포크' : chosen === 'special' ? '초고속 마구 결정구' : '바깥쪽 유인구 (볼)';
+      const typeLabel = chosen === 'fast' ? '강속 직구' : chosen === 'break' ? '슬라이더/포크' : chosen === 'special' ? '초고속 마구 결정구' : '바깥쪽 유인구 (볼)';
       document.getElementById('hudPitchInfo').textContent = `${game.pitchSpeedKmh}km ${typeLabel}`;
     }
 
@@ -1047,6 +1279,7 @@
 
     function throwUserPitch(type) {
       if (isUserBatting()) return;
+      if (game.pitchState === 'pitching' || game.pitchState === 'hit_flight') return;
       if (type === 'special') {
         if (game.specialPitchLeft <= 0) {
           showBanner('⚠️ 마구 소진!', '일반 구종으로 승부하세요.');
@@ -1055,9 +1288,7 @@
         game.specialPitchLeft--;
         updateHud();
       }
-      if (game.pitchState === 'idle' || game.pitchState === 'result_delay' || game.pitchState === 'windup') {
-        startNextPitch(type);
-      }
+      startNextPitch(type);
     }
 
     function executeSwing() {
@@ -1074,54 +1305,70 @@
       const cfg = getLevelCfg();
       const p = game.pitchProgress;
 
-      // 선수강화 보너스 반영
-      const powerBonus = ((game.account.upgrades.power || 1) - 1) * 0.0010;
-      const contactBonus = ((game.account.upgrades.contact || 1) - 1) * 0.0016;
-      const zoneMin = Math.max(0.79, cfg.zoneMin - contactBonus);
-      const zoneMax = Math.min(1.01, cfg.zoneMax + contactBonus);
+      const powerBonus = ((game.account.upgrades.power || 1) - 1) * 0.008;
+      const contactBonus = ((game.account.upgrades.contact || 1) - 1) * 0.014;
+      const zoneMin = Math.max(0.55, cfg.zoneMin - contactBonus);
+      const zoneMax = Math.min(1.08, cfg.zoneMax + contactBonus);
 
       if (p >= zoneMin && p <= zoneMax) {
-        const sweetSpot = 0.90;
+        const sweetSpot = (zoneMin + zoneMax) * 0.5;
         const diff = Math.abs(p - sweetSpot);
-        const ballPenalty = game.pitchType === 'ball' ? 0.015 : 0;
+        const ballPenalty = game.pitchType === 'ball' ? 0.025 : 0;
         const effectiveDiff = diff + ballPenalty;
         const r = Math.random();
 
         if (!isUserBatting()) {
-          // CPU 타격 시 하드코어 보정
-          if (effectiveDiff <= cfg.hrDiff && r < cfg.hrProb + cfg.cpuHitBoost * 0.25) {
-            resolveHit(4, '💥 CPU 홈런 허용!', '상대 타자의 배트 중심에 제대로 걸렸습니다.');
-          } else if (effectiveDiff <= cfg.hitDiff && r < cfg.hitProb + cfg.cpuHitBoost) {
-            resolveHit(1, '⚠️ CPU 안타 허용', '수비 사이를 빠져나가는 적시타!');
-          } else {
+          // 수비 시 구종별 헛스윙·범타 유도 밸런스 적용
+          const pitchEvade = game.pitchType === 'special' ? 0.32
+            : game.pitchType === 'ball' ? 0.28
+            : game.pitchType === 'break' ? 0.18
+            : 0.08;
+          const rDefense = Math.random();
+
+          if (game.pitchType === 'ball' && rDefense < 0.78) {
+            playUmpireTone(true);
+            recordStrike('유인구 헛스윙 유도! (스트라이크)');
+            return;
+          }
+          if (rDefense < pitchEvade + (game.account.upgrades.pitch || 1) * 0.03) {
+            playUmpireTone(true);
+            recordStrike('위력적인 구위! 헛스윙 스트라이크!');
+            return;
+          }
+          if (effectiveDiff <= cfg.hrDiff * 0.65 && r < (cfg.hrProb * 0.14 + cfg.cpuHitBoost * 0.10)) {
+            resolveHit(4, '💥 CPU 솔로 홈런 허용', '실투가 가운데로 몰리며 담장을 넘어갔습니다.');
+          } else if (effectiveDiff <= cfg.hitDiff * 0.85 && r < (cfg.hitProb * 0.28 + cfg.cpuHitBoost * 0.35)) {
+            resolveHit(1, '⚠️ CPU 안타 허용', '수비 사이를 빠져나가는 단타입니다.');
+          } else if (r < 0.62) {
             playBatCrack(false);
             recordStrike('파울 / 헛스윙 유도!');
+          } else {
+            playBatCrack(false);
+            recordOut(r < 0.82 ? '👏 내야 땅볼 아웃!' : '👏 외야 뜬공 아웃!', '구위로 타자를 완벽히 제압했습니다!');
           }
           return;
         }
 
-        // 1P 유저 타격 판정 (하드코어 정밀 배럴 판정)
-        if (effectiveDiff <= cfg.hrDiff + powerBonus && r < cfg.hrProb + powerBonus * 2.5) {
+        if (effectiveDiff <= cfg.hrDiff + powerBonus && r < cfg.hrProb + powerBonus * 2.0) {
           resolveHit(4, '🚀 초대형 홈런!!', `[${cfg.shortLabel}] 완벽한 배럴 스윗스팟! 담장을 훌쩍 넘깁니다!`);
-        } else if (effectiveDiff <= cfg.xbhDiff + contactBonus && r < cfg.xbhProb + contactBonus * 2.2) {
-          const basesHit = r < 0.04 ? 3 : 2;
+        } else if (effectiveDiff <= cfg.xbhDiff + contactBonus && r < cfg.xbhProb + contactBonus * 1.6) {
+          const basesHit = r < 0.08 ? 3 : 2;
           resolveHit(basesHit, basesHit === 3 ? '🔥 3루타!!' : '💥 2루타!', '외야 깊숙이 뻗어가는 짜릿한 장타!');
-        } else if (effectiveDiff <= cfg.hitDiff + contactBonus && r < cfg.hitProb + contactBonus * 2.2) {
+        } else if (effectiveDiff <= cfg.hitDiff + contactBonus && r < cfg.hitProb + contactBonus * 1.6) {
           resolveHit(1, '🔥 안타! 1루 진루!', '배트 중심에 맞혀 내야를 꿰뚫는 안타!');
-        } else if (r < 0.64) {
+        } else if (r < 0.58) {
           playBatCrack(false);
           if (game.strikes < 2) game.strikes++;
           updateHud();
           showBanner('⚠️ 파울 볼!', '타이밍이 간발의 차로 빗나갔습니다.');
-          setCasterMessage(game.casterStyle === 'busan' ? '아이고~ 타이밍은 좋았는데 살짝 깎여 맞으면서 파울!' : '배럴 존에서 0.01초 어긋나며 파울 타구가 됩니다.');
+          setCasterMessage(game.casterStyle === 'busan' ? '아이고~ 타이밍은 좋았는데 살짝 깎여 맞으면서 파울!' : '배럴 존에서 살짝 어긋나며 파울 타구가 됩니다.');
           scheduleNextPitchDelay(1.0);
         } else {
           playBatCrack(false);
           game.account.stats.atBats++;
-          recordOut(r < 0.82 ? '내야 땅볼 아웃!' : '외야 뜬공 아웃!', '배트 끝에 빗맞으며 야수 정면으로 향했습니다.');
+          recordOut(r < 0.79 ? '내야 땅볼 아웃!' : '외야 뜬공 아웃!', '배트 끝에 빗맞으며 야수 정면으로 향했습니다.');
         }
       } else {
-        // 스윗스팟 밖 헛스윙
         playUmpireTone(true);
         const earlyLate = p < zoneMin ? '공이 오기 전 너무 빠른 헛스윙!' : '구속에 밀린 늦은 헛스윙!';
         recordStrike(earlyLate);
@@ -1131,13 +1378,12 @@
     function executeBunt() {
       if (!isUserBatting() || game.pitchState !== 'pitching') return;
       const p = game.pitchProgress;
-      if (p >= 0.80 && p <= 0.98) {
+      if (p >= 0.65 && p <= 1.04) {
         playBatCrack(false);
         const r = Math.random();
-        if (r < 0.34) {
+        if (r < 0.42) {
           resolveHit(1, '🎯 기습 번트 안타!', '3루 선상을 타고 흐르는 완벽한 기습 번트!');
         } else if (game.bases[0] || game.bases[1] || game.bases[2]) {
-          // 희생 번트 진루
           advanceRunners(1, false);
           game.account.stats.atBats++;
           recordOut('👏 희생 번트 성공!', '주자를 한 베이스씩 안전하게 진루시켰습니다!');
@@ -1156,7 +1402,7 @@
         showBanner('⚠️ 도루 불가', '루상에 주자가 없습니다!');
         return;
       }
-      const success = Math.random() < 0.56;
+      const success = Math.random() < 0.60;
       if (success) {
         advanceRunners(1, false);
         updateHud();
@@ -1200,14 +1446,13 @@
         }
       }
 
-      // 3D 타구 포물선 비행 설정
       game.pitchState = 'hit_flight';
       game.hitFlightTime = 0;
       game.hitFlightDuration = basesCount === 4 ? 1.85 : 1.15;
-      game.hitStart = { x: 0, y: 1.1, z: 0 };
+      game.hitStart = { x: 0, y: 1.2, z: 0 };
       const spreadX = (Math.random() - 0.5) * (basesCount === 4 ? 42 : 34);
       const distZ = basesCount === 4 ? -78 : basesCount >= 2 ? -52 : -30;
-      game.hitTarget = { x: spreadX, y: 0.3, z: distZ };
+      game.hitTarget = { x: spreadX, y: 0.4, z: distZ };
       game.hitMaxHeight = basesCount === 4 ? 22 : basesCount >= 2 ? 11 : 4.5;
       game.pendingHitResult = { basesCount, title, sub };
 
@@ -1223,6 +1468,7 @@
       const res = game.pendingHitResult;
       if (!res) return;
       game.pendingHitResult = null;
+
       const runs = advanceRunners(res.basesCount, true);
       if (isUserBatting()) {
         game.homeScore += runs;
@@ -1325,9 +1571,15 @@
     }
 
     function scheduleNextPitchDelay(sec) {
+      if (!isUserBatting()) {
+        game.pitchState = 'waiting_user_pitch';
+        game.ballPos = { x: 0, y: 1.8, z: -18.4 };
+        document.getElementById('hudPitchInfo').textContent = '구종을 선택해 투구하세요!';
+        return;
+      }
       game.pitchState = 'result_delay';
       game.pitchTimer = sec;
-      game.ballPos = { x: 0, y: 1.5, z: -18.4 };
+      game.ballPos = { x: 0, y: 1.8, z: -18.4 };
     }
 
     function endMatch() {
@@ -1358,16 +1610,25 @@
       game.stamina = 100;
       game.bullpenLeft = 4;
       game.specialPitchLeft = 3;
+      game.pitchState = 'idle';
+      game.ballPos = { x: 0, y: 1.8, z: -18.4 };
+      if (renderer) syncTeamColorsOnField();
       updateHud();
-      scheduleNextPitchDelay(0.7);
+      scheduleNextPitchDelay(0.8);
+      setCasterMessage('새 경기가 시작되었습니다! 초록 스윗스팟 링을 노려 스윙하세요!');
     }
 
-    // ================= 7. 2.5D 직교 아케이드 3D 엔진 (Three.js) & 2D 탑뷰 =================
-    let scene, orthoCamera, renderer;
-    let ballMesh, sweetSpotRing, batPivot;
+    // ================= 7. 하이 앵글 3D 엔진 (Three.js) & 2D 탑뷰 =================
+    let scene, camera, renderer;
+    let ballGroup, ballShadowMesh, sweetSpotRing, batPivot;
     let batterMeshGroup, pitcherMeshGroup;
+    let runnerMeshes = [];
     let fielderMeshes = [];
-    const ORTHO_VIEW_SIZE = 21.5;
+    const BASE_COORDS = [
+      { x: 13.5, z: -13.5 },  // 1루
+      { x: 0, z: -27.0 },     // 2루
+      { x: -13.5, z: -13.5 }  // 3루
+    ];
 
     function initThree() {
       const canvas = document.getElementById('threeCanvas');
@@ -1376,150 +1637,156 @@
       const h = wrap.clientHeight || 420;
 
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x0c243c);
+      scene.background = new THREE.Color(0x0b1f38);
 
-      const aspect = w / h;
-      orthoCamera = new THREE.OrthographicCamera(
-        -ORTHO_VIEW_SIZE * aspect,
-        ORTHO_VIEW_SIZE * aspect,
-        ORTHO_VIEW_SIZE,
-        -ORTHO_VIEW_SIZE,
-        0.1,
-        250
-      );
-      // 하이 앵글 쿼터뷰 카메라 (첫 번째 사진 구도)
-      orthoCamera.position.set(0, 44, 24);
-      orthoCamera.lookAt(0, 0, -23);
+      camera = new THREE.PerspectiveCamera(44, w / h, 0.5, 300);
+      camera.position.set(0, 34, 21);
+      camera.lookAt(0, 0, -25);
 
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
       renderer.setSize(w, h);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
-      // 조명 (선명한 아케이드 톤)
-      const amb = new THREE.AmbientLight(0xffffff, 0.92);
+      const amb = new THREE.AmbientLight(0xffffff, 0.88);
       scene.add(amb);
-      const dir = new THREE.DirectionalLight(0xffffff, 0.55);
-      dir.position.set(20, 50, 25);
+      const dir = new THREE.DirectionalLight(0xffffff, 0.65);
+      dir.position.set(22, 48, 28);
       scene.add(dir);
 
-      // 외야 부채꼴 잔디 (홈플레이트 원점 기준 90도 정확 정렬)
-      const outfieldGeo = new THREE.CircleGeometry(66, 64, Math.PI * 0.25, Math.PI * 0.5);
+      // 외야 잔디 부채꼴
+      const outfieldGeo = new THREE.CircleGeometry(68, 64, Math.PI * 0.25, Math.PI * 0.5);
       outfieldGeo.rotateX(-Math.PI / 2);
-      const outfieldMat = new THREE.MeshLambertMaterial({ color: 0x16a34a });
-      const outfieldMesh = new THREE.Mesh(outfieldGeo, outfieldMat);
-      outfieldMesh.position.set(0, 0, 0);
+      const outfieldMesh = new THREE.Mesh(outfieldGeo, new THREE.MeshLambertMaterial({ color: 0x16a34a }));
       scene.add(outfieldMesh);
 
-      // 워닝트랙 링
-      const warningGeo = new THREE.RingGeometry(61, 66, 64, 1, Math.PI * 0.25, Math.PI * 0.5);
+      // 워닝트랙
+      const warningGeo = new THREE.RingGeometry(63, 68, 64, 1, Math.PI * 0.25, Math.PI * 0.5);
       warningGeo.rotateX(-Math.PI / 2);
-      const warningMat = new THREE.MeshLambertMaterial({ color: 0xb45309 });
-      const warningMesh = new THREE.Mesh(warningGeo, warningMat);
+      const warningMesh = new THREE.Mesh(warningGeo, new THREE.MeshLambertMaterial({ color: 0xb45309 }));
       warningMesh.position.y = 0.02;
       scene.add(warningMesh);
 
-      // 외야 파란 펜스 & 노란 상단 패드
+      // 노란 외야 펜스
       const fencePoints = [];
       for (let i = 0; i <= 48; i++) {
         const ang = Math.PI * 0.25 + (Math.PI * 0.5) * (i / 48);
-        fencePoints.push(new THREE.Vector3(Math.cos(ang) * 66, 1.4, -Math.sin(ang) * 66));
+        fencePoints.push(new THREE.Vector3(Math.cos(ang) * 68, 1.5, -Math.sin(ang) * 68));
       }
-      const fenceCurve = new THREE.CatmullRomCurve3(fencePoints);
-      const fenceTube = new THREE.TubeGeometry(fenceCurve, 48, 0.55, 8, false);
-      const fenceMesh = new THREE.Mesh(fenceTube, new THREE.MeshLambertMaterial({ color: 0xfacc15 }));
-      scene.add(fenceMesh);
+      const fenceTube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(fencePoints), 48, 0.6, 8, false);
+      scene.add(new THREE.Mesh(fenceTube, new THREE.MeshLambertMaterial({ color: 0xfacc15 })));
 
       // 내야 다이아몬드 흙
-      const infieldGeo = new THREE.PlaneGeometry(27, 27);
+      const infieldGeo = new THREE.PlaneGeometry(28.5, 28.5);
       infieldGeo.rotateX(-Math.PI / 2);
       infieldGeo.rotateY(Math.PI / 4);
-      const infieldMat = new THREE.MeshLambertMaterial({ color: 0xd97706 });
-      const infieldMesh = new THREE.Mesh(infieldGeo, infieldMat);
-      infieldMesh.position.set(0, 0.04, -19.1);
+      const infieldMesh = new THREE.Mesh(infieldGeo, new THREE.MeshLambertMaterial({ color: 0xd97706 }));
+      infieldMesh.position.set(0, 0.04, -19.2);
       scene.add(infieldMesh);
 
-      // 내야 중앙 잔디
-      const innerGrassGeo = new THREE.PlaneGeometry(17.5, 17.5);
+      // 내야 안쪽 잔디
+      const innerGrassGeo = new THREE.PlaneGeometry(18.2, 18.2);
       innerGrassGeo.rotateX(-Math.PI / 2);
       innerGrassGeo.rotateY(Math.PI / 4);
-      const innerGrassMat = new THREE.MeshLambertMaterial({ color: 0x15803d });
-      const innerGrassMesh = new THREE.Mesh(innerGrassGeo, innerGrassMat);
-      innerGrassMesh.position.set(0, 0.06, -19.1);
+      const innerGrassMesh = new THREE.Mesh(innerGrassGeo, new THREE.MeshLambertMaterial({ color: 0x15803d }));
+      innerGrassMesh.position.set(0, 0.06, -19.2);
       scene.add(innerGrassMesh);
 
-      // 투수 마운드
-      const moundGeo = new THREE.CircleGeometry(2.5, 24);
+      // 투수 마운드 & 홈 서클
+      const moundGeo = new THREE.CircleGeometry(2.6, 24);
       moundGeo.rotateX(-Math.PI / 2);
       const moundMesh = new THREE.Mesh(moundGeo, new THREE.MeshLambertMaterial({ color: 0xb45309 }));
       moundMesh.position.set(0, 0.08, -18.4);
       scene.add(moundMesh);
 
-      // 파울 라인 (좌·우)
+      const homeCircleGeo = new THREE.CircleGeometry(3.2, 24);
+      homeCircleGeo.rotateX(-Math.PI / 2);
+      const homeCircleMesh = new THREE.Mesh(homeCircleGeo, new THREE.MeshLambertMaterial({ color: 0xd97706 }));
+      homeCircleMesh.position.set(0, 0.07, 0);
+      scene.add(homeCircleMesh);
+
+      // 좌우 타석(배터박스) 라인 & 좌우 노란 파울폴
+      const boxMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      [-1.35, 1.35].forEach(bx => {
+        const boxGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.15, 0.04, 2.1));
+        const boxLine = new THREE.LineSegments(boxGeo, new THREE.LineBasicMaterial({ color: 0xffffff }));
+        boxLine.position.set(bx, 0.12, 0.1);
+        scene.add(boxLine);
+      });
+      [-48.08, 48.08].forEach(px => {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 12, 10), new THREE.MeshLambertMaterial({ color: 0xfacc15 }));
+        pole.position.set(px, 6, -48.08);
+        scene.add(pole);
+      });
+
+      // 파울 라인
       const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const leftLineGeo = new THREE.PlaneGeometry(0.32, 66);
+      const leftLineGeo = new THREE.PlaneGeometry(0.35, 68);
       leftLineGeo.rotateX(-Math.PI / 2);
       leftLineGeo.rotateY(Math.PI / 4);
       const leftLine = new THREE.Mesh(leftLineGeo, lineMat);
-      leftLine.position.set(-23.33, 0.09, -23.33);
+      leftLine.position.set(-24.04, 0.09, -24.04);
       scene.add(leftLine);
 
-      const rightLineGeo = new THREE.PlaneGeometry(0.32, 66);
+      const rightLineGeo = new THREE.PlaneGeometry(0.35, 68);
       rightLineGeo.rotateX(-Math.PI / 2);
       rightLineGeo.rotateY(-Math.PI / 4);
       const rightLine = new THREE.Mesh(rightLineGeo, lineMat);
-      rightLine.position.set(23.33, 0.09, -23.33);
+      rightLine.position.set(24.04, 0.09, -24.04);
       scene.add(rightLine);
 
-      // 베이스 (홈, 1루, 2루, 3루)
-      const baseCoords = [
-        { x: 0, z: 0 },
-        { x: 13.5, z: -13.5 },
-        { x: 0, z: -27 },
-        { x: -13.5, z: -13.5 }
-      ];
-      baseCoords.forEach(b => {
-        const bg = new THREE.BoxGeometry(1.1, 0.2, 1.1);
+      // 홈 & 1, 2, 3루 베이스
+      [{ x: 0, z: 0 }, ...BASE_COORDS].forEach(b => {
+        const bg = new THREE.BoxGeometry(1.2, 0.22, 1.2);
         bg.rotateY(Math.PI / 4);
         const bm = new THREE.Mesh(bg, new THREE.MeshLambertMaterial({ color: 0xffffff }));
         bm.position.set(b.x, 0.14, b.z);
         scene.add(bm);
       });
 
-      // 스윗스팟 타이밍 링 (홈플레이트 앞)
-      const ringGeo = new THREE.RingGeometry(1.15, 1.55, 32);
+      // 스윗스팟 타격 링
+      const ringGeo = new THREE.RingGeometry(1.25, 1.8, 32);
       ringGeo.rotateX(-Math.PI / 2);
       sweetSpotRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide }));
-      sweetSpotRing.position.set(0, 0.16, -1.6);
+      sweetSpotRing.position.set(0, 0.16, -1.4);
       scene.add(sweetSpotRing);
 
-      // 투수 & 타자 & 야수 캐릭터 생성
+      // 투수
       pitcherMeshGroup = createPlayerBlock(0x074ca1, 0xffffff);
       pitcherMeshGroup.position.set(0, 0, -18.4);
       scene.add(pitcherMeshGroup);
 
+      // 타자 + 몸에 자연스럽게 부착된 배트 피벗
       batterMeshGroup = createPlayerBlock(0xea0029, 0x06141f);
-      batterMeshGroup.position.set(-1.3, 0, 0.2);
+      batterMeshGroup.position.set(-1.35, 0, 0.1);
       scene.add(batterMeshGroup);
 
-      // 배트
       batPivot = new THREE.Group();
-      batPivot.position.set(-0.7, 1.25, 0.2);
-      const batGeo = new THREE.CylinderGeometry(0.11, 0.07, 1.65, 10);
-      batGeo.rotateZ(Math.PI / 2);
+      batPivot.position.set(0.42, 1.15, 0.15);
+      const batGeo = new THREE.CylinderGeometry(0.11, 0.065, 1.75, 10);
+      batGeo.rotateX(Math.PI / 2);
       const batMesh = new THREE.Mesh(batGeo, new THREE.MeshLambertMaterial({ color: 0xfbbf24 }));
-      batMesh.position.set(0.75, 0, 0);
+      batMesh.position.set(0, 0, -0.85);
       batPivot.add(batMesh);
-      scene.add(batPivot);
+      batterMeshGroup.add(batPivot);
 
-      // 야수 7명 배치
+      // 1루, 2루, 3루 주자 메시 생성
+      runnerMeshes = BASE_COORDS.map((coord, idx) => {
+        const r = createPlayerBlock(0xea0029, 0xfacc15);
+        r.position.set(coord.x + (idx === 0 ? 1.1 : idx === 2 ? -1.1 : 0), 0, coord.z - 0.8);
+        r.visible = false;
+        scene.add(r);
+        return r;
+      });
+
+      // 수비수 7명
       const fielderPos = [
-        { x: 13.5, z: -15.5 },  // 1루수
-        { x: 6.5, z: -25.5 },   // 2루수
-        { x: -6.5, z: -25.5 },  // 유격수
-        { x: -13.5, z: -15.5 }, // 3루수
-        { x: -25, z: -42 },     // 좌익수
-        { x: 0, z: -50 },       // 중견수
-        { x: 25, z: -42 }       // 우익수
+        { x: 13.8, z: -15.8 },
+        { x: 6.8, z: -25.8 },
+        { x: -6.8, z: -25.8 },
+        { x: -13.8, z: -15.8 },
+        { x: -26, z: -43 },
+        { x: 0, z: -52 },
+        { x: 26, z: -43 }
       ];
       fielderMeshes = fielderPos.map(pos => {
         const f = createPlayerBlock(0x074ca1, 0xffffff);
@@ -1528,11 +1795,30 @@
         return f;
       });
 
-      // 야구공
-      const ballGeo = new THREE.SphereGeometry(0.36, 16, 16);
-      ballMesh = new THREE.Mesh(ballGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
-      ballMesh.position.set(0, 1.5, -18.4);
-      scene.add(ballMesh);
+      // 적당한 크기의 선명한 야구공 + 빨간 실밥 띠 + 바닥 그림자
+      ballGroup = new THREE.Group();
+      const coreBall = new THREE.Mesh(
+        new THREE.SphereGeometry(0.44, 18, 18),
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
+      );
+      const seamRing = new THREE.Mesh(
+        new THREE.TorusGeometry(0.45, 0.055, 8, 22),
+        new THREE.MeshBasicMaterial({ color: 0xef4444 })
+      );
+      seamRing.rotation.x = Math.PI / 3;
+      ballGroup.add(coreBall);
+      ballGroup.add(seamRing);
+      ballGroup.position.set(0, 1.8, -18.4);
+      scene.add(ballGroup);
+
+      const shadowGeo = new THREE.CircleGeometry(0.48, 18);
+      shadowGeo.rotateX(-Math.PI / 2);
+      ballShadowMesh = new THREE.Mesh(
+        shadowGeo,
+        new THREE.MeshBasicMaterial({ color: 0x090d16, transparent: true, opacity: 0.65 })
+      );
+      ballShadowMesh.position.set(0, 0.14, -18.4);
+      scene.add(ballShadowMesh);
 
       syncTeamColorsOnField();
     }
@@ -1572,6 +1858,11 @@
       batterMeshGroup.children[0].material.color.set(batTeam.color);
       batterMeshGroup.children[2].material.color.set(batTeam.subColor);
 
+      runnerMeshes.forEach(r => {
+        r.children[0].material.color.set(batTeam.color);
+        r.children[2].material.color.set(batTeam.subColor);
+      });
+
       pitcherMeshGroup.children[0].material.color.set(fldTeam.color);
       pitcherMeshGroup.children[2].material.color.set(fldTeam.subColor);
 
@@ -1582,22 +1873,17 @@
     }
 
     function onWindowResize() {
-      if (!renderer || !orthoCamera) return;
+      if (!renderer || !camera) return;
       const canvas = document.getElementById('threeCanvas');
       const wrap = canvas.parentElement;
       const w = wrap.clientWidth || 800;
       const h = wrap.clientHeight || 420;
-      const aspect = w / h;
-      orthoCamera.left = -ORTHO_VIEW_SIZE * aspect;
-      orthoCamera.right = ORTHO_VIEW_SIZE * aspect;
-      orthoCamera.top = ORTHO_VIEW_SIZE;
-      orthoCamera.bottom = -ORTHO_VIEW_SIZE;
-      orthoCamera.updateProjectionMatrix();
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     }
     window.addEventListener('resize', onWindowResize);
 
-    // 2D 클래식 탑뷰 렌더링
     function render2DStadium() {
       const canvas = document.getElementById('canvas2D');
       if (!canvas || game.viewMode !== '2d') return;
@@ -1611,7 +1897,6 @@
       const H = canvas.height;
       ctx.clearRect(0, 0, W, H);
 
-      // 배경 잔디
       ctx.fillStyle = '#15803d';
       ctx.fillRect(0, 0, W, H);
 
@@ -1619,7 +1904,6 @@
       const homeY = H * 0.86;
       const rOut = Math.min(W * 0.46, H * 0.78);
 
-      // 외야 부채꼴
       ctx.beginPath();
       ctx.moveTo(cx, homeY);
       ctx.arc(cx, homeY, rOut, -Math.PI * 0.75, -Math.PI * 0.25);
@@ -1630,7 +1914,6 @@
       ctx.strokeStyle = '#facc15';
       ctx.stroke();
 
-      // 내야 다이아몬드
       const d = rOut * 0.36;
       ctx.beginPath();
       ctx.moveTo(cx, homeY);
@@ -1644,14 +1927,30 @@
       ctx.strokeStyle = '#ffffff';
       ctx.stroke();
 
-      // 공 위치 매핑
+      const base2DCoords = [
+        { x: cx + d, y: homeY - d },
+        { x: cx, y: homeY - d * 2 },
+        { x: cx - d, y: homeY - d }
+      ];
+      base2DCoords.forEach((pt, idx) => {
+        if (game.bases[idx]) {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y - 8, 7, 0, Math.PI * 2);
+          ctx.fillStyle = '#facc15';
+          ctx.fill();
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      });
+
       const normX = game.ballPos.x / 66;
       const normZ = -game.ballPos.z / 66;
       const bx = cx + normX * rOut;
       const by = homeY - normZ * rOut;
 
       ctx.beginPath();
-      ctx.arc(bx, by, 6 + game.ballPos.y * 0.35, 0, Math.PI * 2);
+      ctx.arc(bx, by, 5.5 + game.ballPos.y * 0.28, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
       ctx.strokeStyle = '#ef4444';
@@ -1659,7 +1958,6 @@
       ctx.stroke();
     }
 
-    // 메인 애니메이션 루프
     let lastFrameTime = performance.now();
     function animateLoop(now) {
       requestAnimationFrame(animateLoop);
@@ -1670,8 +1968,8 @@
         updateSimulation(dt);
       }
 
-      if (game.viewMode === '3d' && renderer && scene && orthoCamera) {
-        renderer.render(scene, orthoCamera);
+      if (game.viewMode === '3d' && renderer && scene && camera) {
+        renderer.render(scene, camera);
       } else if (game.viewMode === '2d') {
         render2DStadium();
       }
@@ -1680,21 +1978,36 @@
     function updateSimulation(dt) {
       const cfg = getLevelCfg();
 
-      // 배트 스윙 애니메이션
       if (game.swingAnimTimer > 0) {
         game.swingAnimTimer -= dt;
         const t = 1 - Math.max(0, game.swingAnimTimer / 0.32);
-        if (batPivot) batPivot.rotation.y = -Math.PI * 0.85 * Math.sin(t * Math.PI);
-      } else if (batPivot) {
-        batPivot.rotation.y = 0.35;
+        const swingCurve = Math.sin(t * Math.PI);
+        if (batterMeshGroup) batterMeshGroup.rotation.y = -0.55 * swingCurve;
+        if (batPivot) batPivot.rotation.y = -0.8 + swingCurve * 2.45;
+      } else {
+        if (batterMeshGroup) batterMeshGroup.rotation.y = 0.25;
+        if (batPivot) batPivot.rotation.y = -0.85;
       }
 
+      runnerMeshes.forEach((mesh, idx) => {
+        mesh.visible = Boolean(game.bases[idx]);
+        if (mesh.visible) {
+          const lead = Math.sin(performance.now() * 0.004 + idx) * 0.35;
+          const base = BASE_COORDS[idx];
+          mesh.position.set(base.x + (idx === 0 ? 1.1 : idx === 2 ? -1.1 : lead), 0, base.z - 0.8 + lead);
+        }
+      });
+
       if (game.pitchState === 'result_delay') {
+        const meter = document.getElementById('timingMeterWrap');
+        if (meter) meter.classList.add('hidden');
         game.pitchTimer -= dt;
         if (game.pitchTimer <= 0) {
           startNextPitch();
         }
       } else if (game.pitchState === 'windup') {
+        const meter = document.getElementById('timingMeterWrap');
+        if (meter) meter.classList.add('hidden');
         game.pitchTimer += dt;
         if (game.pitchTimer >= 0.45) {
           game.pitchState = 'pitching';
@@ -1705,41 +2018,56 @@
         const p = game.pitchTimer / game.pitchDuration;
         game.pitchProgress = p;
 
-        // 공 궤적 계산 (-18.4 -> 0)
+        const meter = document.getElementById('timingMeterWrap');
+        if (meter && isUserBatting()) {
+          meter.classList.remove('hidden');
+          const contactBonus = ((game.account.upgrades.contact || 1) - 1) * 0.014;
+          const zMin = Math.max(0.55, cfg.zoneMin - contactBonus);
+          const zMax = Math.min(1.08, cfg.zoneMax + contactBonus);
+          const sweetEl = document.getElementById('timingSweetZone');
+          const cursorEl = document.getElementById('timingCursor');
+          if (sweetEl) {
+            sweetEl.style.left = `${Math.min(100, (zMin / 1.12) * 100)}%`;
+            sweetEl.style.width = `${Math.max(4, ((zMax - zMin) / 1.12) * 100)}%`;
+          }
+          if (cursorEl) {
+            cursorEl.style.left = `${Math.min(98, Math.max(0, (p / 1.12) * 100))}%`;
+          }
+        }
+
         const z = -18.4 + p * 18.8;
         const x = Math.sin(p * Math.PI) * game.curveOffset;
-        const y = 1.55 - p * 0.45;
+        const y = 2.4 - p * 1.25 + Math.sin(p * Math.PI) * 0.65;
         game.ballPos = { x, y, z };
 
-        // 스윗스팟 링 색상 피드백
         if (sweetSpotRing) {
           if (p >= cfg.zoneMin && p <= cfg.zoneMax) {
             sweetSpotRing.material.color.setHex(0x22c55e);
-            sweetSpotRing.scale.set(1.18, 1.18, 1);
+            sweetSpotRing.scale.set(1.25, 1.25, 1);
           } else {
             sweetSpotRing.material.color.setHex(0x38bdf8);
-            sweetSpotRing.scale.set(1, 1, 1);
+            sweetSpotRing.scale.set(1.0, 1.0, 1);
           }
         }
 
-        // AI 대타 모드 자동 스윙
-        if (isUserBatting() && game.autoOffense && !game.autoOffenseSwingScheduled && p >= 0.895) {
+        if (isUserBatting() && game.autoOffense && !game.autoOffenseSwingScheduled && p >= (cfg.zoneMin + cfg.zoneMax) * 0.5) {
           game.autoOffenseSwingScheduled = true;
-          if (game.pitchType !== 'ball' || Math.random() < 0.45) {
-            executeSwing();
-          }
+          executeSwing();
         }
 
-        // CPU 타석 자동 스윙
-        if (!isUserBatting() && !game.cpuSwingScheduled && p >= 0.88) {
+        if (!isUserBatting() && !game.cpuSwingScheduled && p >= 0.84) {
           game.cpuSwingScheduled = true;
-          if (game.pitchType !== 'ball' || Math.random() < 0.35 + cfg.cpuHitBoost * 0.5) {
+          const swingChance = game.pitchType === 'ball'
+            ? 0.42
+            : Math.min(0.92, 0.76 + cfg.cpuHitBoost * 0.35);
+          if (Math.random() < swingChance) {
+            // CPU 타자 스윙 타이밍에 자연스러운 오차 부여
+            game.pitchProgress = p + (Math.random() - 0.5) * 0.16;
             executeSwing();
           }
         }
 
-        // 포수 미트 통과 (노스윙 판정)
-        if (p >= 1.04) {
+        if (p >= 1.12) {
           if (game.pitchType === 'ball') {
             recordBall();
           } else {
@@ -1748,29 +2076,40 @@
           }
         }
       } else if (game.pitchState === 'hit_flight') {
+        const meter = document.getElementById('timingMeterWrap');
+        if (meter) meter.classList.add('hidden');
         game.hitFlightTime += dt;
         const t = Math.min(1, game.hitFlightTime / game.hitFlightDuration);
         const x = game.hitStart.x + (game.hitTarget.x - game.hitStart.x) * t;
         const z = game.hitStart.z + (game.hitTarget.z - game.hitStart.z) * t;
-        const y = 1.1 + Math.sin(t * Math.PI) * game.hitMaxHeight;
+        const y = 1.2 + Math.sin(t * Math.PI) * game.hitMaxHeight;
         game.ballPos = { x, y, z };
 
         if (t >= 1) {
           finishHitFlight();
         }
+      } else {
+        const meter = document.getElementById('timingMeterWrap');
+        if (meter) meter.classList.add('hidden');
       }
 
-      if (ballMesh) {
-        ballMesh.position.set(game.ballPos.x, game.ballPos.y, game.ballPos.z);
+      if (ballGroup) {
+        ballGroup.position.set(game.ballPos.x, game.ballPos.y, game.ballPos.z);
+        ballGroup.rotation.x += dt * 14;
+        ballGroup.rotation.y += dt * 9;
+      }
+      if (ballShadowMesh) {
+        ballShadowMesh.position.set(game.ballPos.x, 0.14, game.ballPos.z);
+        const shadowScale = Math.max(0.45, 1.15 - game.ballPos.y * 0.04);
+        ballShadowMesh.scale.set(shadowScale, shadowScale, 1);
       }
     }
 
-    // 키보드 단축키 지원
     window.addEventListener('keydown', e => {
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
       if (e.code === 'Space') {
         e.preventDefault();
-        executeSwing();
+        if (isUserBatting()) executeSwing();
       } else if (e.key === 'b' || e.key === 'B') {
         executeBunt();
       } else if (e.key === 's' || e.key === 'S') {
@@ -1781,6 +2120,8 @@
         throwUserPitch('break');
       } else if (e.key === '3' && !isUserBatting()) {
         throwUserPitch('ball');
+      } else if (e.key === '4' && !isUserBatting()) {
+        throwUserPitch('special');
       }
     });
 
@@ -1820,7 +2161,7 @@
 
     function buyUpgrade(key, cost) {
       if (game.account.points < cost) {
-        alert('포인트가 부족합니다! 경기 홈런이나 퀴즈로 포인트를 모아보세요.');
+        showCustomAlert('포인트가 부족합니다! 경기 홈런이나 퀴즈로 포인트를 모아보세요.');
         return;
       }
       addPoints(-cost);
@@ -1860,7 +2201,7 @@
 
     function unlockTeam(teamId, cost) {
       if (game.account.points < cost) {
-        alert('포인트가 부족합니다!');
+        showCustomAlert('포인트가 부족합니다!');
         return;
       }
       addPoints(-cost);
@@ -1902,9 +2243,12 @@
       });
     }
 
-    function syncCloudRankings(manual = false) {
+    async function syncCloudRankings(manual = false) {
+      if (window.__cloudBridge && window.__cloudBridge.ready) {
+        await fetchSupabaseAll();
+      }
       renderRankingsTable();
-      if (manual) showBanner('🔄 랭킹 동기화 완료', '최신 동아리 부스 순위가 반영되었습니다.');
+      if (manual) showBanner('🔄 랭킹 동기화 완료', 'Supabase 최신 부스 순위가 반영되었습니다.');
     }
 
     // 야구 퀴즈
@@ -1968,40 +2312,52 @@
     // 운영진 관리실 대시보드
     function renderAdminDashboard() {
       if (!game.account.isAdmin) return;
+      if (typeof window.updateCloudStatusBadge === 'function') window.updateCloudStatusBadge();
       const db = getUsersDatabase();
-      const names = Object.keys(db);
-      document.getElementById('adminTotalUsers').textContent = `${names.length}명`;
-      document.getElementById('adminCurrentName').textContent = game.account.username;
+      const usernames = Object.keys(db);
+      document.getElementById('adminTotalUsers').textContent = `${usernames.length}명`;
+      document.getElementById('adminCurrentName').textContent = game.account.username || '-';
 
       const tbody = document.getElementById('adminUserTableBody');
+      if (!tbody) return;
       tbody.innerHTML = '';
-      if (names.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500">아직 가입된 일반 부원이 없습니다.</td></tr>';
+      if (usernames.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-4 px-3 text-center text-slate-400">아직 가입된 부원이 없습니다.</td></tr>`;
         return;
       }
-      names.forEach(u => {
-        const rec = db[u];
+      usernames.forEach(u => {
+        const info = db[u];
         const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-900/60';
         tr.innerHTML = `
-          <td class="py-2 px-3 font-bold text-white">${u}</td>
-          <td class="py-2 px-3 text-slate-400">${rec.pin}</td>
-          <td class="py-2 px-3 font-extrabold text-amber-300">${rec.points} PT</td>
-          <td class="py-2 px-3 text-slate-300">${(rec.unlockedTeams || []).length}구단</td>
-          <td class="py-2 px-3 space-x-1">
-            <button onclick="adminAdjustUserPoints('${u}', 300)" class="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-bold">+300</button>
-            <button onclick="adminAdjustUserPoints('${u}', -300)" class="px-2 py-1 rounded bg-rose-800 hover:bg-rose-700 text-white font-bold">-300</button>
+          <td class="py-2.5 px-3 font-black text-white">${u}</td>
+          <td class="py-2.5 px-3 text-slate-400">${info.pin || '-'}</td>
+          <td class="py-2.5 px-3 font-extrabold text-amber-300">${info.points ?? 0} PT</td>
+          <td class="py-2.5 px-3 text-sky-300">${(info.unlockedTeams || []).length}개 구단</td>
+          <td class="py-2.5 px-3 space-x-1.5">
+            <button onclick="adminAdjustUserPoints('${u}', 300)" class="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold">+300</button>
+            <button onclick="adminAdjustUserPoints('${u}', -300)" class="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 text-white font-bold">-300</button>
           </td>
         `;
         tbody.appendChild(tr);
       });
     }
 
-    function adminAdjustUserPoints(username, delta) {
+    async function adminAdjustUserPoints(username, delta) {
       if (!game.account.isAdmin) return;
       const db = getUsersDatabase();
       if (!db[username]) return;
-      db[username].points = Math.max(0, (db[username].points || 0) + delta);
-      saveUsersDatabase(db);
+      const updated = {
+        ...db[username],
+        points: Math.max(0, (db[username].points || 0) + delta)
+      };
+      await saveUserRecordToCloud(username, updated);
+
+      const ranks = getRankingsDatabase();
+      const rEntry = ranks.find(r => r.username === username);
+      if (rEntry) {
+        await saveRankingEntryToCloud({ ...rEntry, points: updated.points });
+      }
       renderAdminDashboard();
     }
 
@@ -2011,25 +2367,40 @@
       showBanner(`👑 +${amount} PT 충전 완료!`, '운영진 계정에 포인트가 지급되었습니다.');
     }
 
-    function adminResetRankings() {
+    async function adminResetRankings() {
       if (!game.account.isAdmin) return;
-      if (!confirm('정말로 부스 실시간 랭킹을 초기화하시겠습니까?')) return;
-      localStorage.removeItem(STORAGE_KEYS.rankingsDb);
+      const ok = await showCustomConfirm('정말로 부스 실시간 랭킹을 초기화하시겠습니까?');
+      if (!ok) return;
+
+      const bridge = window.__cloudBridge;
+      if (bridge && bridge.ready && bridge.client) {
+        try {
+          await bridge.client.from('festival_rankings').delete().neq('username', '');
+        } catch (e) {}
+      }
+      memoryRankingsDb = [
+        { username: '사직거포이대호', team: 'LOTTE', hr: 7, wins: 5, points: 1420 },
+        { username: '무등산호랑이', team: 'KIA', hr: 5, wins: 4, points: 1180 },
+        { username: '잠실스피드스터', team: 'LG', hr: 4, wins: 3, points: 960 },
+        { username: '대구라이온킹', team: 'SAMSUNG', hr: 3, wins: 2, points: 810 }
+      ];
       renderRankingsTable();
       showBanner('⚠️ 랭킹 초기화 완료', '기본 랭킹 데이터로 재설정되었습니다.');
     }
 
     // ================= 9. 초기 부팅 =================
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', async () => {
+      await initSupabaseSync();
       restoreSavedSession();
       populateTeamSelectors();
       updateAccountPointsUI();
       updateHud();
       renderRankingsTable();
       initThree();
+      switchTab('home');
       scheduleNextPitchDelay(0.6);
       requestAnimationFrame(animateLoop);
     });
   </script>
 </body>
-</html>
+                                            </html>
